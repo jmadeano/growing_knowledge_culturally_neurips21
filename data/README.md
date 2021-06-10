@@ -45,7 +45,7 @@
 	- a json parsable list of objects where each object stores information about an individual frame of the current level
 		- frame: the frame number
 		- score: the current score (as of frame _frame_number_)
-		- bonus_score: the current score with bonuses calculated by VGDL (as of frame _frame_number_) -- bonuses are generally applied at the end of a game, so this will generally be equivalent to __score__ except for time-based games
+		- bonus_score: the current score with bonuses calculated by VGDL (as of frame _frame_number_) - bonuses are generally applied at the end of a game, so this will generally be equivalent to __score__ except for time-based games
 		- ended: a boolean representing whether the game has ended
 		- win: a boolean representing whether the game has been one, null if ended == false
 		- objects: a json object representing the current state of the gameboard (all sprites and their locations) -- generated using `game.getFullState(...)` and can be used to create a video replay of the level using `setFullState(...)`
@@ -127,5 +127,107 @@ __Note:__ This repo does not include the states column due to file size limitati
 - __dead_end__					text
 	- reason for disqualifying the participant -- null if the participant should not be disqualified
 
-  ## Calculated Data
-  
+## Calculated Data
+
+### Messages with Diff
+
+Computed using: `edit_distance_data_transformations.py`
+
+Resulting data: `messages_with_diff.csv`
+
+
+A modified message table with additional computed statistics on edit distance/text changes between received messages and written messages.
+
+___Same as raw data:___
+
+[__deployment__, __exp_id__, __val_id__,	__game_name__,	__game_number__,	__message__, __passed_count__, __chain__, __generation__,	__received_messages__, __received_from_id__]
+
+___New/Updated fields:___
+
+- __edit_distance__: the Levenshtein Distance between received message and written message
+- __diff_list__: a list of strings composed of a primitive str and two functions ADD(.) and DEL(.). The functions are represented as strings with a prefix based on the function name (i.e. 'ADD(' or 'DEL(') and an opened parenthesis and a suffix of a closed parenthesis. We do not define a notion of recursion, so there are no nested functions. _THIS LIST IS NOT OPTIMAL AND DOES NOT REFLECT THE SAME CHANGES AS __diff_del_count__ AND __diff_add_count__._
+-	__diff_del_count__: the minimal number of characters that need to be removed to the received message in order transform to the new written message
+-	__diff_add_count__: the minimal number of characters that need to be added to the received message in order transform to the new written message
+- __diff_unchanged_count__: the number of characters that are unchanged between the received message and new written message
+
+
+### Ordered Message History
+Computed using: `ordered_message_history.py`
+
+Resulting data: `ordered_message_history.csv`
+
+A table with `n_chains`\*`n_games` rows (e.g. 10\*10 = 100 rows). Each row represents a unique chain-row pair and the table is ordered by [__deployment__, __chain__, __game_number__].
+
+
+___Same as raw data:___
+
+[__deployment__, __chain__, __game_number__, __game_name__]
+
+___New/Updated fields:___
+
+- __message__: A list of strings where the i-th string represents the message written by the  i-th generation of the particular chain for the particular game
+
+
+### Ordered Message History by Sentence
+Computed using: `ordered_message_history.py`
+
+Resulting data: `ordered_message_history_by_sentence.csv`
+
+An expansion of `messages.csv` where each row represents a sentence rather than an entire written message. Sentence parsing is done using `sent_tokenize` (from `nltk.tokenize`). By default, the table is sorted by [__deployment__, __chain__, __generation__, __game_number__, __sentence_number__].
+
+
+___Same as raw data:___
+
+[__deployment__, __chain__, __generation__, __exp_id__, __game_number__, __game_name__, __message__]
+
+___New/Updated fields:___
+
+- __edit_distance__: the Levenshtein Distance between received message and written message
+- __sentence__: A component sentence of __message__ (as parsed by `nltk`)
+- __sentence_number__: The index of the sentence within the message
+- __sentence\_is\_duplicate__: FALSE if this is the first time the sentence occurs (first based on the ordering described above), otherwise TRUE
+
+
+
+### Ngrams
+Computed using: `ngram_data_transformations.py`
+
+Resulting data: `unigrams.csv`, `bigrams.csv`, `trigrams.csv`
+
+An expansion of `messages.csv` where each row represents an ngram within a particular sentence of a particular message rather than an entire written message. Sentence parsing is done using `sent_tokenize` (from `nltk.tokenize`) and tokenization/lemmatization/POS relies on `spacy`. By default, the table is sorted by [__deployment__, __chain__, __generation__, __game_number__, __sentence\_number__, __ngram\_number__].
+
+___Same as raw data:___
+
+[__deployment__, __chain__, __generation__, __exp\_id__, __game\_number__, __game\_name__, __message__]
+
+
+___New/Updated fields:___
+
+- __edit\_distance__: the Levenshtein Distance between received message and written message
+- __sentence__: A component sentence of __message__ (as parsed by `nltk`)
+- __sentence\_number__: The index of the sentence within the message
+- __sentence\_is\_duplicate__: FALSE if this is the first time the sentence occurs (first based on the ordering described above), otherwise TRUE
+- __ngram\_raw__: the raw tokens of the ngram separated by space (' ') if n > 1
+- __ngram\_number__: the index of the ngram within the sentence
+- __ngram\_lemmatized__: the lemmatized tokens of the ngram separated by space (' ') if n > 1
+- __ngram\_pos__: the part of speech tag of each token in the ngram separated by space (' ') if n > 1
+- __contains\_stopword__: TRUE if any of the tokens in the ngram are considered stop words, otherwise FALSE
+
+
+___Note:___ Different counts of ngrams (e.g. `unigrams.csv`, `bigrams.csv`, `trigrams.csv`) all have the same fields, and __ngram_raw__, __ngram_lemmatized__, __ngram_pos__ are always strings. However, in ngrams where n > 1, we separate tokens with single spaces. For example, consider the sentence "Touch the blue square". The first unigram and bigram are shown below:
+
+#### Unigrams
+
+- __ngram_raw__: "Touch"
+- __ngram_number__: 0
+- __ngram_lemmatized__: "touch"
+- __ngram_pos__: "VERB"
+- __contains_stopword__: FALSE
+
+#### Bigrams
+
+- __ngram_raw__: "Touch the"
+- __ngram_number__: 0
+- __ngram_lemmatized__: "touch the"
+- __ngram_pos__: "VERB DET"
+- __contains_stopword__: TRUE
