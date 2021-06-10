@@ -13,11 +13,11 @@ count_summary_fn <- function(x) x %>%
   mutate(stat = n / sum(n))
 
 mean_ci_funs <- list("ci_lower" = ci_lower, "mean" = mean, "ci_upper" = ci_upper)
-df.ugram %>%
-  group_by(generation) %>%
-  tidyboot(summary_function = count_summary_fn,
-        statistics_functions = function(x) x %>%
-        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+# df.ugram %>%
+#   group_by(generation) %>%
+#   tidyboot(summary_function = count_summary_fn,
+#         statistics_functions = function(x) x %>%
+#         summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
 parse_sum_scores <- function(x){
   sum(as.numeric(unlist(str_split(str_remove_all(x, "[Decimal'()\\[\\]]"), ","))), na.rm = T)
@@ -48,22 +48,13 @@ parse_sum_scores <- function(x){
 
 dropbox_path <- "~/Dropbox (MIT)/"
 project.path <- paste(dropbox_path, "cogsci21/data/", sep = "")
+project.path <- "data/"
 
 ```
 
 # Control Data Analysis
 
 ## Losses and steps by game
-
-```{r}
-df.ind <- read_csv(paste(project.path, "control_first_level_losses.csv", sep = ""))
-
-df.ind %>%
-  pivot_longer(c(first_level_losses, 
-               total_losses, first_level_steps, total_steps)) %>%
-  group_by(game, name) %>%
-  tidyboot_mean(column = value ) -> df_ind_summary
-```
 
 We only care about control games that match games from our experiment:
 
@@ -78,15 +69,22 @@ We only care about control games that match games from our experiment:
 - variant_lemmings_2
 - zelda
 
-
-```{r our games}
+```{r}
 our_games <- c("ee", "avoidgeorge", "sokoban", "plaqueattack",
   "preconditions", "push_boulders", "relational", "watergame", 
   "lemminds_2", "zelda")
 
+df.ind <- read_csv(paste(project.path, "control_first_level_losses.csv", sep = ""))
+
+df.ind %>%
+  filter(game %in% our_games) %>%
+  pivot_longer(c(first_level_losses, 
+               total_losses, first_level_steps, total_steps)) %>%
+  group_by(game, name) %>%
+  tidyboot_mean(column = value ) -> df_ind_summary
+
 
 df_ind_summary %>%
-  filter(game %in% our_games) %>%
   ggplot(., aes(x = game, y = mean, ymin = ci_lower, ymax = ci_upper))+
   geom_point()+
   geom_linerange()+
@@ -123,7 +121,7 @@ df_ind_steps_summary %>%
   group_by(game_name, level_number) %>%
   tidyboot_mean(column = steps_on_level) -> df_ind_steps_bs
 
-write_csv(df_ind_steps_bs, paste(project.path, "control_data_steps_game_level_bs.csv", sep = ""))
+# write_csv(df_ind_steps_bs, paste(project.path, "control_data_steps_game_level_bs.csv", sep = ""))
 ```
 
 
@@ -145,7 +143,7 @@ df_ind_summary %>%
   group_by(game_name) %>%
   tidyboot_mean(column = learn_eff) -> df_ind_eff_summary
 
-write_csv(df_ind_eff_summary, paste(project.path, "control_data_learnEff_bs.csv", sep = ""))
+#write_csv(df_ind_eff_summary, paste(project.path, "control_data_learnEff_bs.csv", sep = ""))
 
 ```
 
@@ -306,7 +304,7 @@ df_ind_gen_bs %>%
     x = 'Number of lives'
   )
 
-ggsave("figs/individualLearners_levelsAchieved_generation.pdf", width = 7, height = 5)
+# ggsave("figs/individualLearners_levelsAchieved_generation.pdf", width = 7, height = 5)
 ```
 
 
@@ -335,7 +333,7 @@ df_ind_expand_summary_gen %>%
          fraction_levels_completed = n_wins / levels_in_game) -> df_ind_expand_summary_gen_adj
 
 
-write_csv(df_ind_expand_summary_gen_adj, file = "individualLearners_generationalFormat.csv")
+# write_csv(df_ind_expand_summary_gen_adj, file = "individualLearners_generationalFormat.csv")
 
 
 brm(
@@ -345,7 +343,7 @@ brm(
    data = df_ind_expand_summary_gen_adj %>%
    filter(game_name != "ExploreExploit"),
  family = cumulative("logit"),
- file = "brm_fit_ordinal_pedro",
+ file = "brm_fit_ordinal_control",
  chains = 4,
  iter = 3000,
  cores = 4
@@ -450,7 +448,7 @@ df_ind_expand_summary_gen_adj_uniqid_jitter %>%
     y = "Fraction of levels completed"
   )
 
-ggsave("figs/cogsciExpt_individuals_adjLevel_brm_byGame.pdf", width = 7, height = 5)
+# ggsave("figs/cogsciExpt_individuals_adjLevel_brm_byGame.pdf", width = 7, height = 5)
 ```
 
 
@@ -459,7 +457,7 @@ ggsave("figs/cogsciExpt_individuals_adjLevel_brm_byGame.pdf", width = 7, height 
 ## Loading Data
 ```{r}
 
- failed_chains <- c("BkS2ANvld", "ByA9TVDed", "Hyd8aEwgd",
+failed_chains <- c("BkS2ANvld", "ByA9TVDed", "Hyd8aEwgd",
                     "rkQAqkUg_", "SkLyCEDl_", "SyZstewe_")
 
 
@@ -476,7 +474,7 @@ df_game <- read_csv(paste(project.path, "experiments_no_states.csv", sep = "")) 
 
 cbind(
   df_game %>% 
-    dplyr::select(, -data),
+    dplyr::select(-data),
   df_game %>%
     dplyr::pull(data) %>%
     purrr::map(., jsonlite::fromJSON) %>%
@@ -496,6 +494,10 @@ cbind(
 df_survey %>%
   select(chain, exp_id, generation, enjoyment, total_score, fairprice, comments, problems, previous_experience) -> df_survey_select
 
+df_survey %>%
+  filter(!is.na(game_order), is.na(dead_end), !is.na(chain)) -> df_survey_filtered
+
+
 df_survey_select[with(df_survey_select, order(chain, generation)), ] %>%
   rmarkdown::paged_table()
 ```
@@ -512,7 +514,7 @@ Question was: "Have you ever played any of these games before? If so, how many?"
 
 ```{r}
 df_survey_filtered %>%
-  filter(!(exp_id %in% ninth_gen_misfit)) %>%
+  #filter(!(exp_id %in% ninth_gen_misfit)) %>%
   mutate(no_exp = (
     str_detect(str_to_lower(previous_experience), "no") |
       previous_experience %in% c("0", "I haven't before", "I haven't played any of these games before.",
@@ -541,8 +543,6 @@ Essentially, if `game_order` is null OR `dead_end` is not NA/null, we want to ig
 
 
 ```{r filter data}
-df_survey %>%
-  filter(!is.na(game_order), is.na(dead_end), !is.na(chain)) -> df_survey_filtered
 
 df_survey_filtered %>%
   filter(generation == 8) %>%
@@ -718,7 +718,7 @@ df_game_frac_bs %>%
   guides(color = F)+
   labs(x = "Game", y = "Fraction of Game Completed")
 
-ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
+# ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
 
 ```
 
@@ -756,8 +756,7 @@ df_gen_wins %>%
   labs(x = "Generation", y = "Number of levels won by player")+
   ylim(0, 45)
   
-# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.pdf", width = 4, height = 3)
-ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
+# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
 
 ```
 
@@ -860,37 +859,37 @@ brm(
  cores = 4
 ) -> brm.fit
 
-brm(
- max_adj_level ~ generation + 
-  (1 + generation | chain) +
-  (1 + generation | game_name),
-   data = df_game_summary_cummax %>%
-   filter(game_name != "explore_exploit_v1"),
- family = cumulative("logit"),
- file = "brm_fit_cummax_ordinal_n80",
- # family = gaussian(),
- chains = 4,
- iter = 3000,
- cores = 4
-) -> brm.fit.m
+# brm(
+#  max_adj_level ~ generation + 
+#   (1 + generation | chain) +
+#   (1 + generation | game_name),
+#    data = df_game_summary_cummax %>%
+#    filter(game_name != "explore_exploit_v1"),
+#  family = cumulative("logit"),
+#  file = "brm_fit_cummax_ordinal_n80",
+#  # family = gaussian(),
+#  chains = 4,
+#  iter = 3000,
+#  cores = 4
+# ) -> brm.fit.m
 
 brm.fit
 
-brm(
- fraction_levels_completed ~ generation + 
-  (1 + generation | chain) +
-  (1 + generation | game_name),
-   data = df_game_summary_adj %>%
-   filter(game_name != "explore_exploit_v1"),
- # family = cumulative("logit"),
- file = "brm_fit_linear_n80",
- family = gaussian(),
- chains = 4,
- iter = 3000,
- cores = 4
-) -> brm.fit.linear
+# brm(
+#  fraction_levels_completed ~ generation + 
+#   (1 + generation | chain) +
+#   (1 + generation | game_name),
+#    data = df_game_summary_adj %>%
+#    filter(game_name != "explore_exploit_v1"),
+#  # family = cumulative("logit"),
+#  file = "brm_fit_linear_n80",
+#  family = gaussian(),
+#  chains = 4,
+#  iter = 3000,
+#  cores = 4
+# ) -> brm.fit.linear
 
-brm.fit.linear
+# brm.fit.linear
 
 ```
 
@@ -1007,7 +1006,7 @@ df_game_summary_adj_uniqid_jitter %>%
   )#+
 
 # ggsave("figs/cogsciExpt_adjLevel_brm_n80_byGame.pdf", width = 7, height = 5)
-ggsave("figs/cogsciExpt_adjLevel_brm_n80_byGame.png", width = 7, height = 5)
+# ggsave("figs/cogsciExpt_adjLevel_brm_n80_byGame.png", width = 7, height = 5)
 
 ```
 
