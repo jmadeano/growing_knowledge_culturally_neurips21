@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from os import path, mkdir
+import json
 
 
 def editDistanceWith2Ops(X, Y):
@@ -123,7 +124,6 @@ def apply_edit_distance(m1, m2, edit_cost = 1):
     if m1 is np.nan or m2 is np.nan:
         return -1
 
-    m2 = m2[0]
     return edit_distance(m1, m2, substitution_cost=edit_cost, transpositions=False)
 
 
@@ -154,6 +154,12 @@ def create_messages_with_diff():
     file_path = f'{relative_data_dir}/messages_with_diff.csv'
 
     messages_with_diff_df = messages_df
+
+    # Convert received_messages from a singleton list to a string
+    messages_with_diff_df.received_messages = messages_with_diff_df.received_messages.apply(lambda x: json.loads(x)[0] if x is not np.nan else x)
+
+    # Passed count of -1 means they didn't finish the study, this selects all valid messages
+    messages_with_diff_df = messages_with_diff_df[messages_with_diff_df.passed_count != -1]
 
     messages_with_diff_df['edit_distance'] = messages_with_diff_df.apply(lambda row:
                                                                             apply_edit_distance(row['message'],
