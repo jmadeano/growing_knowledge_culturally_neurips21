@@ -47,7 +47,8 @@ parse_sum_scores <- function(x){
 }
 
 path_to_repo_folder <- "~/Dropbox (MIT)/" # replace "cogsci21" with your repo folder name
-project.path <- paste(path_to_repo_folder, "cogsci21/data/", sep = "")
+path_to_repo_folder <- "~/projects/"
+project.path <- paste(path_to_repo_folder, "growing_knowledge_culturally_cogsci21/data/", sep = "")
 
 ```
 
@@ -74,7 +75,7 @@ df_game <- read_csv(paste(project.path, "experiments_no_states.csv", sep = "")) 
 
 cbind(
   df_game %>% 
-    dplyr::select(, -data),
+    dplyr::select(., -data),
   df_game %>%
     dplyr::pull(data) %>%
     purrr::map(., jsonlite::fromJSON) %>%
@@ -313,12 +314,12 @@ df_game_frac_bs %>%
   guides(color = F)+
   labs(x = "Game", y = "Fraction of Game Completed")
 
-ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
+# ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
 
 ```
 
 
-####  FIGURE 3: Levels won by a player throughout 10 novel games vs. the generation in a chain
+#### FIGURE 3: Levels won by a player throughout 10 novel games vs. the generation in a chain
 
 ```{r}
 
@@ -351,8 +352,8 @@ df_gen_wins %>%
   labs(x = "Generation", y = "Number of levels won by player")+
   ylim(0, 45)
   
-# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.pdf", width = 4, height = 3)
-ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
+
+# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
 
 ```
 
@@ -428,37 +429,24 @@ brm(
  cores = 4
 ) -> brm.fit
 
-brm(
- max_adj_level ~ generation +
-  (1 + generation | chain) +
-  (1 + generation | game_name),
-   data = df_game_summary_cummax %>%
-   filter(game_name != "explore_exploit_v1"),
- family = cumulative("logit"),
- file = "brm_fit_cummax_ordinal_n80",
- # family = gaussian(),
- chains = 4,
- iter = 3000,
- cores = 4
-) -> brm.fit.m
 
 brm.fit
 
-brm(
- fraction_levels_completed ~ generation +
-  (1 + generation | chain) +
-  (1 + generation | game_name),
-   data = df_game_summary_adj %>%
-   filter(game_name != "explore_exploit_v1"),
- # family = cumulative("logit"),
- file = "brm_fit_linear_n80",
- family = gaussian(),
- chains = 4,
- iter = 3000,
- cores = 4
-) -> brm.fit.linear
-
-brm.fit.linear
+# brm(
+#  fraction_levels_completed ~ generation +
+#   (1 + generation | chain) +
+#   (1 + generation | game_name),
+#    data = df_game_summary_adj %>%
+#    filter(game_name != "explore_exploit_v1"),
+#  # family = cumulative("logit"),
+#  file = "brm_fit_linear_n80",
+#  family = gaussian(),
+#  chains = 4,
+#  iter = 3000,
+#  cores = 4
+# ) -> brm.fit.linear
+# 
+# brm.fit.linear
 
 ```
 
@@ -611,6 +599,8 @@ df_game_wins_steps_bs %>%
 
 ### FIGURE 5: Game steps summary per win of level of game by generation
 
+All games.
+
 ```{r}
 df_game_level_wins_summary %>%
   group_by(game_name, level_number, generation) %>%
@@ -629,10 +619,11 @@ df_game_wins_gen_steps_bs %>%
   guides(color = guide_legend(reverse = T, title = 'level_number'))+
   labs( y = 'average number of steps', x = 'generation')#+
 
-ggsave("figs/cogsciExpt_stepsPerWin_byGenbyGame.png", width = 25, height = 10)
+# ggsave("figs/cogsciExpt_stepsPerWin_byGenbyGame.png", width = 25, height = 10)
 
 ```
 
+Example games: Explore/Exploit and Relational
 
 ```{r}
 df_game_wins_gen_steps_bs %>%
@@ -655,7 +646,7 @@ df_game_wins_gen_steps_bs %>%
   guides(color = F)+
   labs( y = 'Number of steps taken to win level', x = 'Generation')#+
 
-ggsave("figs/cogsciExpt_stepsByLevel_2games_n80.pdf", width = 5, height = 3)
+# ggsave("figs/cogsciExpt_stepsByLevel_2games_n80.pdf", width = 5, height = 3)
 ```
 
 # Control Data Analysis
@@ -1313,7 +1304,7 @@ df_game_summary_edit %>%
   summarize(mean_val = mean(val),
             total_levels_won = sum(levels_completed) )  %>% 
   ungroup() %>%
-  mutate(key = factor(key, levels = c("edit_distance", "diff_add_count", "diff_del_count"),
+  mutate(key = factor(key, levels = c( "diff_add_count", "diff_del_count", "edit_distance"),
                       labels = c(  "additions", "deletions", "total edits"))) -> df_chain_game_edit_levelswon
   #group_by()
 
@@ -1332,7 +1323,7 @@ df_chain_game_edit_levelswon %>%
   theme(legend.position = 'bottom')+
   guides(fill = guide_colourbar(nbin = 8))
 
-ggsave("figs/cogsciExpt_add_vs_deletions_byLevelsWon.pdf", 
-       width = 5, height = 3)
+# ggsave("figs/cogsciExpt_add_vs_deletions_byLevelsWon.pdf", 
+#        width = 5, height = 3)
 
 ```
