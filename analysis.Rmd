@@ -13,11 +13,11 @@ count_summary_fn <- function(x) x %>%
   mutate(stat = n / sum(n))
 
 mean_ci_funs <- list("ci_lower" = ci_lower, "mean" = mean, "ci_upper" = ci_upper)
-# df.ugram %>%
-#   group_by(generation) %>%
-#   tidyboot(summary_function = count_summary_fn,
-#         statistics_functions = function(x) x %>%
-#         summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+df.ugram %>%
+  group_by(generation) %>%
+  tidyboot(summary_function = count_summary_fn,
+        statistics_functions = function(x) x %>%
+        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
 parse_sum_scores <- function(x){
   sum(as.numeric(unlist(str_split(str_remove_all(x, "[Decimal'()\\[\\]]"), ","))), na.rm = T)
@@ -46,418 +46,18 @@ parse_sum_scores <- function(x){
   sum(as.numeric(unlist(str_split(str_remove_all(x, "[Decimal'()\\[\\]]"), ","))), na.rm = T)
 }
 
-dropbox_path <- "~/Dropbox (MIT)/"
-project.path <- paste(dropbox_path, "cogsci21/data/", sep = "")
-project.path <- "data/"
+path_to_repo_folder <- "~/Dropbox (MIT)/" # replace "cogsci21" with your repo folder name
+project.path <- paste(path_to_repo_folder, "cogsci21/data/", sep = "")
 
-```
-
-# Control Data Analysis
-
-## Losses and steps by game
-
-We only care about control games that match games from our experiment:
-
-- explore_exploit
-- preconditions
-- plaqueattack
-- sokoban
-- avoid_george
-- push_boulders
-- relational
-- watergame
-- variant_lemmings_2
-- zelda
-
-```{r}
-our_games <- c("ee", "avoidgeorge", "sokoban", "plaqueattack",
-  "preconditions", "push_boulders", "relational", "watergame", 
-  "lemminds_2", "zelda")
-
-df.ind <- read_csv(paste(project.path, "control_first_level_losses.csv", sep = ""))
-
-df.ind %>%
-  filter(game %in% our_games) %>%
-  pivot_longer(c(first_level_losses, 
-               total_losses, first_level_steps, total_steps)) %>%
-  group_by(game, name) %>%
-  tidyboot_mean(column = value ) -> df_ind_summary
-
-
-df_ind_summary %>%
-  ggplot(., aes(x = game, y = mean, ymin = ci_lower, ymax = ci_upper))+
-  geom_point()+
-  geom_linerange()+
-  facet_wrap(~name, scales = 'free') + 
-  coord_flip()
-```
-
-## Full dataset
-
-```{r}
-df_pfull <- read_csv(paste(project.path, "control_full_human_data.csv", sep = "")) %>%
-  mutate_at(vars(subject_ID, game_name, agent_type), as.factor)
-
-summary(df_pfull)
-
-df_pfull %>%
-  group_by(subject_ID, game_name, level_number) %>%
-  summarize(
-    levels_won = max(cumulative_wins),
-    total_steps = max(cumulative_steps)
-    ) %>% 
-  group_by(subject_ID, game_name) %>%
-  mutate(
-    steps_on_level = total_steps - lag(total_steps, default = 0)
-  ) -> df_ind_steps_summary
-
-```
-
-
-### Filter/Exclude control data
-```{r}
-df_ind_steps_summary %>%
-  filter(steps_on_level < 1000) %>%
-  group_by(game_name, level_number) %>%
-  tidyboot_mean(column = steps_on_level) -> df_ind_steps_bs
-
-# write_csv(df_ind_steps_bs, paste(project.path, "control_data_steps_game_level_bs.csv", sep = ""))
-```
-
-
-## Learning efficiency
-
-```{r}
-df_ind_steps_summary %>%
-  group_by(subject_ID, game_name) %>%
-  summarize(
-    learn_eff = max(levels_won) / max(total_steps)
-  ) -> df_ind_summary
-
-```
-
-```{r}
-df_ind_summary %>%
-  filter(!is.na(learn_eff)) %>%
-  filter(learn_eff > 0) %>%
-  group_by(game_name) %>%
-  tidyboot_mean(column = learn_eff) -> df_ind_eff_summary
-
-#write_csv(df_ind_eff_summary, paste(project.path, "control_data_learnEff_bs.csv", sep = ""))
-
-```
-
-## Learning efficiency for 1st Two lives
-
-
-```{r}
-df_pfull %>%
-  rowwise() %>%
-  mutate(level_restarts_0 = level_restarts - 1) %>% #View()
-  group_by(subject_ID, game_name, level_number) %>%
-  summarize( max_restarts = max(level_restarts_0) )  %>% 
-  arrange(subject_ID, game_name, level_number) %>% #View()
-  mutate(c_restarts = cumsum(max_restarts),
-         prev_restarts = lag(c_restarts, default = 0)) -> df_cumul_restarts
-
-df_pfull %>%
-  left_join(., df_cumul_restarts) %>% 
-  mutate(
-    level_restarts_0 = level_restarts - 1,
-    curr_life_num = prev_restarts + level_restarts_0 + 1) %>%
-  select(-X1, -agent_type, -levels_lost) -> df_pfull_currLife
-
-df_pfull_currLife %>%
-  filter(curr_life_num < 3) %>% 
-  group_by(subject_ID, game_name) %>%
-  summarize(
-    n_wins = max(cumulative_wins),
-    n_steps = max(cumulative_steps),
-    learn_eff =  n_wins / n_steps
-  ) -> df_ind_summary_2lives
-
-
-```
-
-
-```{r}
-df_ind_summary_2lives %>%
-  group_by(game_name) %>%
-  tidyboot(column = n_wins, summary_function = median,
-           statistics_functions = list(mean = mean, sd = sd)) -> df_ind_2lives_bs
-
-```
-
-## "Generation by generation"
-
-
-```{r}
-df_ind_summary_2lives %>%
-  group_by(game_name) %>%
-  tidyboot(column = n_wins, summary_function = median,
-           statistics_functions = list("mean" = mean, "sd" = sd)) -> df_ind_2lives_bs
-
-```
-
-## "Generation by generation"
-
-```{r}
-df_pfull_currLife %>%
-  ungroup() %>%
-  filter(curr_life_num < 17) %>% 
-  mutate(
-    generation = floor((curr_life_num - 1) / 2)
-  ) %>%
-  group_by(subject_ID, game_name, generation) %>%
-  summarize(
-    n_wins = max(cumulative_wins),
-    n_steps = max(cumulative_steps),
-    learn_eff =  n_wins / n_steps
-  ) -> df_ind_summary_gen
-
-
-df_ind_summary_gen %>%
-  unite(subj_game, c(subject_ID, game_name), sep = ";") %>%
-  distinct(subj_game) %>%
-  pull(subj_game) -> unique.subject.games
-
-ci_lower_80 = function (x, na.rm = FALSE)  {
-    unname(stats::quantile(x, 0.25, na.rm = na.rm))
-}
-ci_upper_80 = function (x, na.rm = FALSE) 
-{
-    unname(stats::quantile(x, 0.75, na.rm = na.rm))
-}
-mean_ci_funs <- list("ci_lower" = ci_lower_80, "mean" = mean, "ci_upper" = ci_upper_80)
-
-
-expand.grid(
-  subj_game = unique.subject.games,
-  generation = unique(df_ind_summary_gen$generation)
-) %>% 
-  separate(subj_game, into = c("subject_ID", "game_name"), sep = ";") %>%
-  left_join(df_ind_summary_gen) %>% 
-  group_by(subject_ID, game_name) %>%
-  mutate(n_wins= ifelse(is.na(n_wins), max(n_wins, na.rm = T), n_wins)) -> df_ind_expand_summary_gen
-  
-df_ind_expand_summary_gen %>%
-  group_by(game_name, generation) %>%
-  tidyboot(summary_function = function(x) x %>% summarise(median = median(n_wins)),
-            statistics_functions = function(x) x %>% summarise(
-              across(median, mean_ci_funs)
-              )
-           ) -> df_ind_gen_bs
-
-
-df_ind_expand_summary_gen %>%
-    ungroup() %>%
-  mutate(game_name = factor(game_name,
-                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", 
-                                       "relational","sokoban", "watergame", "zelda"),
-                            labels = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
-  left_join(., data.frame(
-      game_name = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
-                     5, 5, 4,
-                     4, 5, 5, 5))) %>%
-  mutate(frac_win = n_wins / levels_in_game
-         ) -> df_ind_summary_gen_frac
-
-df_ind_gen_bs %>%
-  ungroup() %>%
-  mutate(
-    game_name = factor(game_name,
-                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", 
-                                       "relational","sokoban", "watergame", "zelda"),
-                            labels = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
-  left_join(., data.frame(
-      game_name = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
-                     5, 5, 4,
-                     4, 5, 5, 5))) %>%
-  mutate(frac_median = empirical_median / levels_in_game,
-         frac_median_lower = median_ci_lower / levels_in_game,
-          frac_median_upper = median_ci_upper / levels_in_game
-         ) %>%
-  filter(game_name != "ExploreExploit") %>%
-  ggplot(., aes( x = generation * 2, y = frac_median, group = game_name,
-                 ymin = frac_median_lower, ymax = frac_median_upper))+
-  geom_line(data = df_ind_summary_gen_frac %>% 
-                filter(game_name != "ExploreExploit"), inherit.aes = F,
-            aes(x = generation * 2, y = frac_win, color = subject_ID),
-            alpha = 0.3
-            )+
-  geom_linerange(alpha = 1)+
-  geom_line()+
-  facet_wrap(~game_name, nrow = 3)+
-  guides(fill = F, color = F)+
-  labs(
-    y = "Fraction of levels completed",
-    x = 'Number of lives'
-  )
-
-# ggsave("figs/individualLearners_levelsAchieved_generation.pdf", width = 7, height = 5)
-```
-
-
-## Ordinal Regression Modeling
-
-```{r}
-
-df_ind_expand_summary_gen %>%
-  mutate(
-    game_name = factor(game_name,
-                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", 
-                                       "relational","sokoban", "watergame", "zelda"),
-                            labels = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
-  left_join(., data.frame(
-      game_name = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
-                     5, 5, 4,
-                     4, 5, 5, 5))) %>%
-  ungroup() %>%
-  rowwise() %>%
-  mutate(adjusted_level = (6 - levels_in_game) + n_wins,
-         fraction_levels_completed = n_wins / levels_in_game) -> df_ind_expand_summary_gen_adj
-
-
-# write_csv(df_ind_expand_summary_gen_adj, file = "individualLearners_generationalFormat.csv")
-
-
-brm(
- adjusted_level ~ generation + 
-  (1 + generation | subject_ID) +
-  (1 + generation | game_name),
-   data = df_ind_expand_summary_gen_adj %>%
-   filter(game_name != "ExploreExploit"),
- family = cumulative("logit"),
- file = "brm_fit_ordinal_control",
- chains = 4,
- iter = 3000,
- cores = 4
-) -> brm.fit.p
-
-df_ind_expand_summary_gen_adj %>%
-  group_by(game_name, subject_ID) %>%
-  data_grid(generation = seq_range(generation, by = 1),
-            subject_ID = 'newsubj') %>%
-    add_draws(predict(brm.fit.p, newdata = ., summary = FALSE,
-                    allow_new_levels = T)) -> brm_fitted_draws_indiv
-
-brm_fitted_draws_indiv %>%
-  left_join(., data.frame(
-      game_name = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
-                     5, 5, 4,
-                     4, 5, 5, 5))) %>% mutate(
-    generation = generation + 1,
-    n_lives = generation * 2,
-    levels_won = .value + levels_in_game - 6,
-    fraction_levels_completed = levels_won / levels_in_game
-  ) %>%
-  filter(game_name != "ExploreExploit") %>%
-  mutate(fraction_levels_completed = ifelse(fraction_levels_completed < 0, 0, fraction_levels_completed))  -> brm_fitted_draws_adj_indiv
-
-# manually add jitter points
-
-
-df_ind_expand_summary_gen_adj %>%
-  mutate(unique_id = paste(subject_ID, game_name, generation, sep = ";")) -> df_ind_expand_summary_gen_adj_uniqid
-         
-
-left_join(
-  df_ind_expand_summary_gen_adj_uniqid %>%
-        mutate(group_id = paste(subject_ID, game_name, sep = ";")),
-  data.frame(
-    unique_id = unique(df_ind_expand_summary_gen_adj_uniqid$unique_id),
-    jitterVal = runif(length(unique(df_ind_expand_summary_gen_adj_uniqid$unique_id)), 
-                      min = -0.04, max = 0.04),
-    jitterValy = runif(length(unique(df_ind_expand_summary_gen_adj_uniqid$unique_id)), 
-                      min = -0.04, max = 0.04)
-  )
-  ) %>%
-  mutate(
-    jitterLives = jitterVal + (generation + 1) * 2,
-    jitterVal = jitterVal + generation + 1,
-    fraction_levels_completed = fraction_levels_completed + jitterValy,
-    generation = generation + 1
-  ) %>%
-  left_join(., data.frame(
-      game_name = c("AvoidGeorge", "ExploreExploit", 
-                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
-                "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
-                     5, 5, 4,
-                     4, 5, 5, 5))) %>%
-  filter(!is.na(fraction_levels_completed)) -> df_ind_expand_summary_gen_adj_uniqid_jitter
-
-
-generational.markers = seq(0, 14, 2)
-
-df_ind_expand_summary_gen_adj_uniqid_jitter %>%
-  filter(game_name != "ExploreExploit") %>%
-  mutate(n_lives = generation * 2) %>%
-  ggplot(., aes( x = generation, y = fraction_levels_completed, group = subject_ID,
-                 color = subject_ID))+
-  stat_lineribbon(data = brm_fitted_draws_adj_indiv,
-                  aes(y = fraction_levels_completed), .width = c(.5),
-                  geom = "lineribbon",
-                  size = 1, linetype = 2, fill = 'grey', color = 'black',
-                  alpha = 0.3)+
-
-  geom_point(
-    aes(x = jitterVal, 
-        y = fraction_levels_completed, 
-         group = subject_ID, color = subject_ID),
-    inherit.aes = F,
-    alpha = 0.4
-  )+
-  geom_line(aes(group = group_id),
-    alpha = 0.3
-  ) +
-  stat_lineribbon(data = brm_fitted_draws_adj_indiv,
-                  aes(y = fraction_levels_completed),
-                  geom = "line",
-                  size = 0.8, linetype = 1, color = 'black',
-                  alpha = 1)+
-  facet_wrap(~game_name, nrow = 3)+
-  scale_y_continuous(limits = c(-0.1, 1.1), 
-                     breaks = c(0, 0.25, 0.5, 0.75, 1))+
-  scale_x_continuous(breaks = 1:8)+
-  theme(
-    strip.text.y = element_text(angle = 0),
-    legend.position = 'bottom'#,
-    )+
-  guides(color = F)+
-  labs(
-    x = "'Generation'",
-    y = "Fraction of levels completed"
-  )
-
-# ggsave("figs/cogsciExpt_individuals_adjLevel_brm_byGame.pdf", width = 7, height = 5)
 ```
 
 
 # Main Experiment
 
-## Loading Data
+## Loading data
 ```{r}
 
-failed_chains <- c("BkS2ANvld", "ByA9TVDed", "Hyd8aEwgd",
+ failed_chains <- c("BkS2ANvld", "ByA9TVDed", "Hyd8aEwgd",
                     "rkQAqkUg_", "SkLyCEDl_", "SyZstewe_")
 
 
@@ -474,7 +74,7 @@ df_game <- read_csv(paste(project.path, "experiments_no_states.csv", sep = "")) 
 
 cbind(
   df_game %>% 
-    dplyr::select(-data),
+    dplyr::select(, -data),
   df_game %>%
     dplyr::pull(data) %>%
     purrr::map(., jsonlite::fromJSON) %>%
@@ -494,10 +94,6 @@ cbind(
 df_survey %>%
   select(chain, exp_id, generation, enjoyment, total_score, fairprice, comments, problems, previous_experience) -> df_survey_select
 
-df_survey %>%
-  filter(!is.na(game_order), is.na(dead_end), !is.na(chain)) -> df_survey_filtered
-
-
 df_survey_select[with(df_survey_select, order(chain, generation)), ] %>%
   rmarkdown::paged_table()
 ```
@@ -506,26 +102,6 @@ df_survey_select[with(df_survey_select, order(chain, generation)), ] %>%
 For new experiment data: sort by [exp_id, game_number, level_number, round_number, start_time, frame_number], in that order (round_number increments when a life is used — round starts at 1 and goes to 2 if the player skips/loses/dies)
 
 Note: If a player refreshes while playing the game, they will be able to restart the level. So far, I don’t see this being a major problem, but we can look into it as we collect more data
-
-
-### Previous game experience
-
-Question was: "Have you ever played any of these games before? If so, how many?"
-
-```{r}
-df_survey_filtered %>%
-  #filter(!(exp_id %in% ninth_gen_misfit)) %>%
-  mutate(no_exp = (
-    str_detect(str_to_lower(previous_experience), "no") |
-      previous_experience %in% c("0", "I haven't before", "I haven't played any of these games before.",
-                                 "Never.", "I have never played any of these games.",
-                                 "I have never played any of these games before.")
-      
-      )) %>%
-  select(previous_experience, no_exp) %>%
-  filter(!no_exp)
-  # kable()
-```
 
 ## Sort data
 
@@ -543,6 +119,8 @@ Essentially, if `game_order` is null OR `dead_end` is not NA/null, we want to ig
 
 
 ```{r filter data}
+df_survey %>%
+  filter(!is.na(game_order), is.na(dead_end), !is.na(chain)) -> df_survey_filtered
 
 df_survey_filtered %>%
   filter(generation == 8) %>%
@@ -559,7 +137,24 @@ length(complete.exp_ids)
 ```
 
 
+### Previous game experience
 
+Question was: "Have you ever played any of these games before? If so, how many?"
+
+```{r}
+df_survey_filtered %>%
+  filter(!(exp_id %in% ninth_gen_misfit)) %>%
+  mutate(no_exp = (
+    str_detect(str_to_lower(previous_experience), "no") |
+      previous_experience %in% c("0", "I haven't before", "I haven't played any of these games before.",
+                                 "Never.", "I have never played any of these games.",
+                                 "I have never played any of these games before.")
+      
+      )) %>%
+  select(previous_experience, no_exp) %>%
+  filter(!no_exp)
+  # kable()
+```
 
 
 ## Analysis
@@ -718,12 +313,12 @@ df_game_frac_bs %>%
   guides(color = F)+
   labs(x = "Game", y = "Fraction of Game Completed")
 
-# ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
+ggsave("figs/cogsciExpt_fracGameComplete_byGame.png", width = 5, height = 3.5)
 
 ```
 
 
-####  Total levels by generation (aggregate game)
+####  FIGURE 3: Levels won by a player throughout 10 novel games vs. the generation in a chain
 
 ```{r}
 
@@ -756,7 +351,8 @@ df_gen_wins %>%
   labs(x = "Generation", y = "Number of levels won by player")+
   ylim(0, 45)
   
-# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
+# ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.pdf", width = 4, height = 3)
+ggsave("figs/cogsciExpt_levelsWon_aggregate_n80.png", width = 4, height = 3)
 
 ```
 
@@ -798,33 +394,6 @@ df_game_summary %>%
 # ggsave("figs/cogsciExpt_fracLevel_byGameChain_n80.pdf", width = 10, height = 8)
 ```
 
-
-```{r}
-
-dodge_width = 0.005
-df_game_summary %>%
-  ggplot(., aes( x = generation, y = fraction_levels_completed, 
-                 group = chain))+
-  geom_line(size = 1, alpha = 0.5,
-             position = position_dodge(dodge_width))+
-  # geom_point(color = 'black', fill = 'black', shape = 15,
-  #            position = position_dodge(dodge_width))+
-  geom_smooth(method = 'lm', inherit.aes = F,
-              aes(x = generation, y = fraction_levels_completed))+
-  facet_wrap(~game_name, nrow = 2)+
-  theme(
-    strip.text.y = element_text(angle = 0),
-    legend.position = 'bottom'#,
-    )+
-  guides(color = F)+
-  labs(
-    x = "Generation", y = "Fraction of levels completed"
-  )#+
-   # scale_x_continuous(limits = c(0, 3), breaks = c(0, 1, 2, 3))
-
-# ggsave("figs/cogsciExpt_fracLevelLines_byGame.pdf", width = 10, height = 7)
-```
-
 ## Ordinal regression
 
 
@@ -846,7 +415,7 @@ df_game_summary_adj %>%
 
 ```{r}
 brm(
- adjusted_level ~ generation + 
+ adjusted_level ~ generation +
   (1 + generation | chain) +
   (1 + generation | game_name),
    data = df_game_summary_adj %>%
@@ -859,42 +428,42 @@ brm(
  cores = 4
 ) -> brm.fit
 
-# brm(
-#  max_adj_level ~ generation + 
-#   (1 + generation | chain) +
-#   (1 + generation | game_name),
-#    data = df_game_summary_cummax %>%
-#    filter(game_name != "explore_exploit_v1"),
-#  family = cumulative("logit"),
-#  file = "brm_fit_cummax_ordinal_n80",
-#  # family = gaussian(),
-#  chains = 4,
-#  iter = 3000,
-#  cores = 4
-# ) -> brm.fit.m
+brm(
+ max_adj_level ~ generation +
+  (1 + generation | chain) +
+  (1 + generation | game_name),
+   data = df_game_summary_cummax %>%
+   filter(game_name != "explore_exploit_v1"),
+ family = cumulative("logit"),
+ file = "brm_fit_cummax_ordinal_n80",
+ # family = gaussian(),
+ chains = 4,
+ iter = 3000,
+ cores = 4
+) -> brm.fit.m
 
 brm.fit
 
-# brm(
-#  fraction_levels_completed ~ generation + 
-#   (1 + generation | chain) +
-#   (1 + generation | game_name),
-#    data = df_game_summary_adj %>%
-#    filter(game_name != "explore_exploit_v1"),
-#  # family = cumulative("logit"),
-#  file = "brm_fit_linear_n80",
-#  family = gaussian(),
-#  chains = 4,
-#  iter = 3000,
-#  cores = 4
-# ) -> brm.fit.linear
+brm(
+ fraction_levels_completed ~ generation +
+  (1 + generation | chain) +
+  (1 + generation | game_name),
+   data = df_game_summary_adj %>%
+   filter(game_name != "explore_exploit_v1"),
+ # family = cumulative("logit"),
+ file = "brm_fit_linear_n80",
+ family = gaussian(),
+ chains = 4,
+ iter = 3000,
+ cores = 4
+) -> brm.fit.linear
 
-# brm.fit.linear
+brm.fit.linear
 
 ```
 
 
-### Line plot with regression
+### FIGURE 4A: Learning across generations
 
 ```{r}
 df_game_summary_adj %>%
@@ -908,13 +477,13 @@ df_game_summary_adj %>%
 
 
 df_levig <- data.frame(
-  game_name = c("avoid_george_v1", "explore_exploit_v1", "lemmings_var2_v1", 
-                "plaqueattack_v1", "preconditions_v1", "push_boulders_v1", 
+  game_name = c("avoid_george_v1", "explore_exploit_v1", "lemmings_var2_v1",
+                "plaqueattack_v1", "preconditions_v1", "push_boulders_v1",
                 "relational_v1", "sokoban_v1", "watergame_v1", "zelda_v1"),
-  full_name = c("AvoidGeorge", "ExploreExploit", 
+  full_name = c("AvoidGeorge", "ExploreExploit",
                 "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
                 "Relational", "Sokoban", "Watergame", "Zelda"),
-  levels_in_game = c(5, 6, 5, 
+  levels_in_game = c(5, 6, 5,
                      5, 5, 4,
                      4, 5, 5, 5)
 )
@@ -929,20 +498,20 @@ brm_fitted_draws %>%
   ) %>%
   filter(game_name != "explore_exploit_v1") -> brm_fitted_draws_adj
 
-## manually add jitter points
+## Manually add jitter points
 
 df_game_summary_adj %>%
   mutate(unique_id = paste(chain, game_name, generation, sep = ";")) -> df_game_summary_adj_uniqid
-         
+
 
 left_join(
   df_game_summary_adj_uniqid %>%
         mutate(group_id = paste(chain, game_name, sep = ";")),
   data.frame(
     unique_id = unique(df_game_summary_adj_uniqid$unique_id),
-    jitterVal = runif(length(unique(df_game_summary_adj_uniqid$unique_id)), 
+    jitterVal = runif(length(unique(df_game_summary_adj_uniqid$unique_id)),
                       min = -0.07, max = 0.07),
-    jitterValy = runif(length(unique(df_game_summary_adj_uniqid$unique_id)), 
+    jitterValy = runif(length(unique(df_game_summary_adj_uniqid$unique_id)),
                       min = -0.07, max = 0.07)
   )
   ) %>%
@@ -952,9 +521,9 @@ left_join(
     generation = generation + 1
   ) %>%
   left_join(., df_levig) -> df_game_summary_adj_uniqid_jitter
-###
 
 
+### CODE RUNS UNTIL HERE^, CRASHES UPON RUNNING THE NEXT SEGMENT (sometimes?)
 
 df_game_summary_adj_uniqid_jitter %>%
   filter(game_name != "explore_exploit_v1") %>%
@@ -969,12 +538,12 @@ df_game_summary_adj_uniqid_jitter %>%
   #   size = 1, alpha = 0.6
   #   )+
   geom_point(
-    aes(x = jitterVal, 
-        y = fraction_levels_completed, 
+    aes(x = jitterVal,
+        y = fraction_levels_completed,
          group = chain, color = chain),
     inherit.aes = F,
     # position = position_jitterdodge(jitter.height = 0.1,
-    #                                 dodge.width = 0.2), 
+    #                                 dodge.width = 0.2),
     alpha = 0.4#,
     #position = position_jitterdodge(jitter.height = 0.1), alpha = 0.4,
     #fill = 'black',
@@ -984,7 +553,7 @@ df_game_summary_adj_uniqid_jitter %>%
     alpha = 0.3
   ) +
   stat_lineribbon(data = brm_fitted_draws_adj,
-                  aes(y = fraction_levels_completed), 
+                  aes(y = fraction_levels_completed),
                   geom = "line",
                   size = 0.8, linetype = 1, color = 'black',
                   alpha = 1)+
@@ -993,7 +562,7 @@ df_game_summary_adj_uniqid_jitter %>%
   #scale_fill_manual(values = alpha(c("grey"), 0.01))+
   #scale_color_viridis(discrete = T)+
   facet_wrap(~full_name, nrow = 3)+
-  scale_y_continuous(#limits = c(-0.1, 1.25), 
+  scale_y_continuous(#limits = c(-0.1, 1.25),
                      breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1))+
   scale_x_continuous(breaks = 1:8)+
   theme(
@@ -1003,9 +572,8 @@ df_game_summary_adj_uniqid_jitter %>%
   guides(color = F)+
   labs(
     x = "Generation", y = "Fraction of levels completed"
-  )#+
+  )
 
-# ggsave("figs/cogsciExpt_adjLevel_brm_n80_byGame.pdf", width = 7, height = 5)
 # ggsave("figs/cogsciExpt_adjLevel_brm_n80_byGame.png", width = 7, height = 5)
 
 ```
@@ -1041,7 +609,7 @@ df_game_wins_steps_bs %>%
   coord_flip()
 ```
 
-### Game steps summary per win of level of game by generation
+### FIGURE 5: Game steps summary per win of level of game by generation
 
 ```{r}
 df_game_level_wins_summary %>%
@@ -1055,20 +623,13 @@ df_game_wins_gen_steps_bs %>%
          level_number = factor(level_number)) %>%
   ggplot(., aes( x = generation, color = level_number,
                  y = mean, ymin = ci_lower, ymax = ci_upper, group = level_number))+
-  # geom_col(width = bar_width, 
-  #          position = position_dodge(bar_width), color = 'black')+
-  # geom_line(position = position_dodge(bar_width))+
   geom_line()+
-  #geom_smooth(method = 'lm')+
   facet_grid(level_number~game_name)+
-  #geom_linerange(position = position_dodge(bar_width), alpha = 0.8)+
   geom_linerange(alpha = 0.8)+
   guides(color = guide_legend(reverse = T, title = 'level_number'))+
   labs( y = 'average number of steps', x = 'generation')#+
-  # coord_flip()
 
-#  ggsave("figs/cogsciExpt_stepsPerWin_byGenbyGame.pdf", width = 10, height = 5.5)
- ggsave("figs/cogsciExpt_stepsPerWin_byGenbyGame.png", width = 25, height = 10)
+ggsave("figs/cogsciExpt_stepsPerWin_byGenbyGame.png", width = 25, height = 10)
 
 ```
 
@@ -1087,77 +648,425 @@ df_game_wins_gen_steps_bs %>%
                           labels = c("ExploreExploit", "Relational"))) %>%
   ggplot(., aes( x = generation, color = level_number,
                  y = mean / 2, ymin = ci_lower /2, ymax = ci_upper/ 2, group = level_number))+
-  # geom_col(width = bar_width, 
-  #          position = position_dodge(bar_width), color = 'black')+
   geom_line(position = position_dodge(bar_width))+
-  #geom_smooth(method = 'lm')+
   facet_grid(game_name~level_number)+
-  #theme(strip.text.y = element_text(angle = 0))+
   geom_linerange(position = position_dodge(bar_width), alpha = 0.8)+
   scale_x_continuous(breaks = 1:8)+
-  guides(color = F)+# guide_legend(reverse = T, title = 'level_number'))+
+  guides(color = F)+
   labs( y = 'Number of steps taken to win level', x = 'Generation')#+
-  # coord_flip()
 
 ggsave("figs/cogsciExpt_stepsByLevel_2games_n80.pdf", width = 5, height = 3)
 ```
 
-# Comparison to control data
+# Control Data Analysis
 
-**Restrict to levels that people win at** 
-- also broken down by generation
+## Losses and steps by game
 
 ```{r}
-df_ind_steps_bs <- read_csv("pedro_data_steps_game_level_bs.csv") %>%
-  mutate(
-    game_name = factor(game_name,
-                       levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", "relational","sokoban", "watergame"),
-    labels = c("avoid_george_v1", "explore_exploit_v1",
-               "lemmings_var2_v1", 
-               "plaqueattack_v1", "preconditions_v1", 
-  "push_boulders_v1", 
-  "relational_v1", "sokoban_v1", "watergame_v1")
-  )
-  )
+df.ind <- read_csv(paste(project.path, "control_first_level_losses.csv", sep = ""))
 
-left_join(
-  df_game_steps_bs, 
-  df_ind_steps_bs %>%
-    select(-n, -empirical_stat) %>%
-    rename(
-      ind_mean = mean,
-      ind_lower = ci_lower,
-      ind_upper = ci_upper
-    )
-) -> df_game_steps_bs_wInd
-
-with(df_game_steps_bs_wInd, cor(mean, ind_mean, 
-                                use = "pairwise.complete.obs"))
-
-df_game_steps_bs_wInd %>%
-  filter(game_name != "zelda_modified_v1") %>%
-  ggplot(., aes( x = ind_mean, xmin = ind_lower, xmax = ind_upper,
-                 y = mean, ymin = ci_lower, ymax = ci_upper,
-                 fill = game_name))+
-  geom_abline(intercept = 0, slope = 1, alpha = 0.3)+
-  scale_fill_viridis(discrete = T)+ 
-  scale_color_viridis(discrete = T)+
-  geom_linerange(alpha = 0.3) + geom_linerangeh(alpha = 0.3)+
-  geom_point(shape = 21, color = 'black')+
-  xlim(0, 500)+ ylim(0, 500)+
-  coord_fixed()+
-  labs(
-    x = "individual play (ave. num steps)",
-    y = "multigen play (ave. num steps)"
-  )
-
-# ggsave("figs/aveSteps_scatter_indiv_multigen.pdf", width = 5, height = 4)
+df.ind %>%
+  pivot_longer(c(first_level_losses, 
+               total_losses, first_level_steps, total_steps)) %>%
+  group_by(game, name) %>%
+  tidyboot_mean(column = value ) -> df_ind_summary
 ```
 
-### Load full control data
+We only care about control games that match games from our experiment:
+
+- explore_exploit
+- preconditions
+- plaqueattack
+- sokoban
+- avoid_george
+- push_boulders
+- relational
+- watergame
+- variant_lemmings_2
+- zelda
+
+
+```{r our games}
+our_games <- c("ee", "avoidgeorge", "sokoban", "plaqueattack",
+  "preconditions", "push_boulders", "relational", "watergame", 
+  "lemminds_2", "zelda")
+
+
+df_ind_summary %>%
+  filter(game %in% our_games) %>%
+  ggplot(., aes(x = game, y = mean, ymin = ci_lower, ymax = ci_upper))+
+  geom_point()+
+  geom_linerange()+
+  facet_wrap(~name, scales = 'free') + 
+  coord_flip()
+```
+
+## Full dataset
 
 ```{r}
-df_ind_expand_summary_gen_adj <- read_csv(file = "individualLearners_generationalFormat.csv")
+df_pfull <- read_csv(paste(project.path, "control_full_human_data.csv", sep = "")) %>%
+  mutate_at(vars(subject_ID, game_name, agent_type), as.factor)
+
+summary(df_pfull)
+
+df_pfull %>%
+  group_by(subject_ID, game_name, level_number) %>%
+  summarize(
+    levels_won = max(cumulative_wins),
+    total_steps = max(cumulative_steps)
+    ) %>% 
+  group_by(subject_ID, game_name) %>%
+  mutate(
+    steps_on_level = total_steps - lag(total_steps, default = 0)
+  ) -> df_ind_steps_summary
+
+```
+
+
+### Filter/Exclude control data
+```{r}
+df_ind_steps_summary %>%
+  filter(steps_on_level < 1000) %>%
+  group_by(game_name, level_number) %>%
+  tidyboot_mean(column = steps_on_level) -> df_ind_steps_bs
+
+write_csv(df_ind_steps_bs, paste(project.path, "COMPUTED_control_data_steps_game_level_bs.csv", sep = ""))
+```
+
+
+## Learning efficiency
+
+```{r}
+df_ind_steps_summary %>%
+  group_by(subject_ID, game_name) %>%
+  summarize(
+    learn_eff = max(levels_won) / max(total_steps)
+  ) -> df_ind_summary
+
+```
+
+```{r}
+df_ind_summary %>%
+  filter(!is.na(learn_eff)) %>%
+  filter(learn_eff > 0) %>%
+  group_by(game_name) %>%
+  tidyboot_mean(column = learn_eff) -> df_ind_eff_summary
+
+write_csv(df_ind_eff_summary, paste(project.path, "COMPUTED_control_data_learnEff_bs.csv", sep = ""))
+
+```
+
+## Learning efficiency for 1st Two lives
+
+
+```{r}
+df_pfull %>%
+  rowwise() %>%
+  mutate(level_restarts_0 = level_restarts - 1) %>% #View()
+  group_by(subject_ID, game_name, level_number) %>%
+  summarize( max_restarts = max(level_restarts_0) )  %>% 
+  arrange(subject_ID, game_name, level_number) %>% #View()
+  mutate(c_restarts = cumsum(max_restarts),
+         prev_restarts = lag(c_restarts, default = 0)) -> df_cumul_restarts
+
+df_pfull %>%
+  left_join(., df_cumul_restarts) %>% 
+  mutate(
+    level_restarts_0 = level_restarts - 1,
+    curr_life_num = prev_restarts + level_restarts_0 + 1) %>%
+  select(-X1, -agent_type, -levels_lost) -> df_pfull_currLife
+
+df_pfull_currLife %>%
+  filter(curr_life_num < 3) %>% 
+  group_by(subject_ID, game_name) %>%
+  summarize(
+    n_wins = max(cumulative_wins),
+    n_steps = max(cumulative_steps),
+    learn_eff =  n_wins / n_steps
+  ) -> df_ind_summary_2lives
+
+
+```
+
+
+```{r}
+df_ind_summary_2lives %>%
+  group_by(game_name) %>%
+  tidyboot(column = n_wins, summary_function = median,
+           statistics_functions = list(mean = mean, sd = sd)) -> df_ind_2lives_bs
+
+```
+
+## "Generation by generation"
+
+
+```{r}
+df_ind_summary_2lives %>%
+  group_by(game_name) %>%
+  tidyboot(column = n_wins, summary_function = median,
+           statistics_functions = list("mean" = mean, "sd" = sd)) -> df_ind_2lives_bs
+
+```
+
+```{r}
+df_pfull_currLife %>%
+  ungroup() %>%
+  filter(curr_life_num < 17) %>% 
+  mutate(
+    generation = floor((curr_life_num - 1) / 2)
+  ) %>%
+  group_by(subject_ID, game_name, generation) %>%
+  summarize(
+    n_wins = max(cumulative_wins),
+    n_steps = max(cumulative_steps),
+    learn_eff =  n_wins / n_steps
+  ) -> df_ind_summary_gen
+
+
+df_ind_summary_gen %>%
+  unite(subj_game, c(subject_ID, game_name), sep = ";") %>%
+  distinct(subj_game) %>%
+  pull(subj_game) -> unique.subject.games
+
+ci_lower_80 = function (x, na.rm = FALSE)  {
+    unname(stats::quantile(x, 0.25, na.rm = na.rm))
+}
+ci_upper_80 = function (x, na.rm = FALSE) 
+{
+    unname(stats::quantile(x, 0.75, na.rm = na.rm))
+}
+mean_ci_funs <- list("ci_lower" = ci_lower_80, "mean" = mean, "ci_upper" = ci_upper_80)
+
+
+expand.grid(
+  subj_game = unique.subject.games,
+  generation = unique(df_ind_summary_gen$generation)
+) %>% 
+  separate(subj_game, into = c("subject_ID", "game_name"), sep = ";") %>%
+  left_join(df_ind_summary_gen) %>% 
+  group_by(subject_ID, game_name) %>%
+  mutate(n_wins= ifelse(is.na(n_wins), max(n_wins, na.rm = T), n_wins)) -> df_ind_expand_summary_gen
+  
+df_ind_expand_summary_gen %>%
+  group_by(game_name, generation) %>%
+  tidyboot(summary_function = function(x) x %>% summarise(median = median(n_wins)),
+            statistics_functions = function(x) x %>% summarise(
+              across(median, mean_ci_funs)
+              )
+           ) -> df_ind_gen_bs
+
+
+df_ind_expand_summary_gen %>%
+    ungroup() %>%
+  mutate(game_name = factor(game_name,
+                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", 
+                                       "relational","sokoban", "watergame", "zelda"),
+                            labels = c("AvoidGeorge", "ExploreExploit", 
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
+  left_join(., data.frame(
+      game_name = c("AvoidGeorge", "ExploreExploit", 
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"),
+  levels_in_game = c(5, 6, 5, 
+                     5, 5, 4,
+                     4, 5, 5, 5))) %>%
+  mutate(frac_win = n_wins / levels_in_game
+         ) -> df_ind_summary_gen_frac
+
+df_ind_gen_bs %>%
+  ungroup() %>%
+  mutate(
+    game_name = factor(game_name,
+                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders", 
+                                       "relational","sokoban", "watergame", "zelda"),
+                            labels = c("AvoidGeorge", "ExploreExploit", 
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
+  left_join(., data.frame(
+      game_name = c("AvoidGeorge", "ExploreExploit", 
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"),
+  levels_in_game = c(5, 6, 5, 
+                     5, 5, 4,
+                     4, 5, 5, 5))) %>%
+  mutate(frac_median = empirical_median / levels_in_game,
+         frac_median_lower = median_ci_lower / levels_in_game,
+          frac_median_upper = median_ci_upper / levels_in_game
+         ) %>%
+  filter(game_name != "ExploreExploit") %>%
+  ggplot(., aes( x = generation * 2, y = frac_median, group = game_name,
+                 ymin = frac_median_lower, ymax = frac_median_upper))+
+  geom_line(data = df_ind_summary_gen_frac %>% 
+                filter(game_name != "ExploreExploit"), inherit.aes = F,
+            aes(x = generation * 2, y = frac_win, color = subject_ID),
+            alpha = 0.3
+            )+
+  geom_linerange(alpha = 1)+
+  geom_line()+
+  facet_wrap(~game_name, nrow = 3)+
+  guides(fill = F, color = F)+
+  labs(
+    y = "Fraction of levels completed",
+    x = 'Number of lives'
+  )
+
+ggsave("figs/individualLearners_levelsAchieved_generation.pdf", width = 7, height = 5)
+```
+
+
+## Ordinal Regression Modeling
+
+### FIGURE 4B: Learning within individuals
+
+```{r}
+
+df_ind_expand_summary_gen %>%
+  mutate(
+    game_name = factor(game_name,
+                            levels = c("avoidgeorge", "ee", "lemmings_2", "plaqueattack", "preconditions", "push_boulders",
+                                       "relational","sokoban", "watergame", "zelda"),
+                            labels = c("AvoidGeorge", "ExploreExploit",
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"))) %>%
+  left_join(., data.frame(
+      game_name = c("AvoidGeorge", "ExploreExploit",
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"),
+  levels_in_game = c(5, 6, 5,
+                     5, 5, 4,
+                     4, 5, 5, 5))) %>%
+  ungroup() %>%
+  rowwise() %>%
+  mutate(adjusted_level = (6 - levels_in_game) + n_wins,
+         fraction_levels_completed = n_wins / levels_in_game) -> df_ind_expand_summary_gen_adj
+
+
+write_csv(df_ind_expand_summary_gen_adj, paste(project.path, "COMPUTED_individualLearners_generationalFormat.csv", sep = ""))
+
+
+brm(
+ adjusted_level ~ generation +
+  (1 + generation | subject_ID) +
+  (1 + generation | game_name),
+   data = df_ind_expand_summary_gen_adj %>%
+   filter(game_name != "ExploreExploit"),
+ family = cumulative("logit"),
+ file = "brm_fit_ordinal_control",
+ chains = 4,
+ iter = 3000,
+ cores = 4
+) -> brm.fit.p
+
+df_ind_expand_summary_gen_adj %>%
+  group_by(game_name, subject_ID) %>%
+  data_grid(generation = seq_range(generation, by = 1),
+            subject_ID = 'newsubj') %>%
+    add_draws(predict(brm.fit.p, newdata = ., summary = FALSE,
+                    allow_new_levels = T)) -> brm_fitted_draws_indiv
+
+brm_fitted_draws_indiv %>%
+  left_join(., data.frame(
+      game_name = c("AvoidGeorge", "ExploreExploit",
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"),
+  levels_in_game = c(5, 6, 5,
+                     5, 5, 4,
+                     4, 5, 5, 5))) %>% mutate(
+    generation = generation + 1,
+    n_lives = generation * 2,
+    levels_won = .value + levels_in_game - 6,
+    fraction_levels_completed = levels_won / levels_in_game
+  ) %>%
+  filter(game_name != "ExploreExploit") %>%
+  mutate(fraction_levels_completed = ifelse(fraction_levels_completed < 0, 0, fraction_levels_completed))  -> brm_fitted_draws_adj_indiv
+
+# manually add jitter points
+
+
+df_ind_expand_summary_gen_adj %>%
+  mutate(unique_id = paste(subject_ID, game_name, generation, sep = ";")) -> df_ind_expand_summary_gen_adj_uniqid
+
+
+left_join(
+  df_ind_expand_summary_gen_adj_uniqid %>%
+        mutate(group_id = paste(subject_ID, game_name, sep = ";")),
+  data.frame(
+    unique_id = unique(df_ind_expand_summary_gen_adj_uniqid$unique_id),
+    jitterVal = runif(length(unique(df_ind_expand_summary_gen_adj_uniqid$unique_id)),
+                      min = -0.04, max = 0.04),
+    jitterValy = runif(length(unique(df_ind_expand_summary_gen_adj_uniqid$unique_id)),
+                      min = -0.04, max = 0.04)
+  )
+  ) %>%
+  mutate(
+    jitterLives = jitterVal + (generation + 1) * 2,
+    jitterVal = jitterVal + generation + 1,
+    fraction_levels_completed = fraction_levels_completed + jitterValy,
+    generation = generation + 1
+  ) %>%
+  left_join(., data.frame(
+      game_name = c("AvoidGeorge", "ExploreExploit",
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda"),
+  levels_in_game = c(5, 6, 5,
+                     5, 5, 4,
+                     4, 5, 5, 5))) %>%
+  filter(!is.na(fraction_levels_completed)) -> df_ind_expand_summary_gen_adj_uniqid_jitter
+
+
+generational.markers = seq(0, 14, 2)
+
+df_ind_expand_summary_gen_adj_uniqid_jitter %>%
+  filter(game_name != "ExploreExploit") %>%
+  mutate(n_lives = generation * 2) %>%
+  ggplot(., aes( x = generation, y = fraction_levels_completed, group = subject_ID,
+                 color = subject_ID))+
+  stat_lineribbon(data = brm_fitted_draws_adj_indiv,
+                  aes(y = fraction_levels_completed), .width = c(.5),
+                  geom = "lineribbon",
+                  size = 1, linetype = 2, fill = 'grey', color = 'black',
+                  alpha = 0.3)+
+
+  geom_point(
+    aes(x = jitterVal,
+        y = fraction_levels_completed,
+         group = subject_ID, color = subject_ID),
+    inherit.aes = F,
+    alpha = 0.4
+  )+
+  geom_line(aes(group = group_id),
+    alpha = 0.3
+  ) +
+  stat_lineribbon(data = brm_fitted_draws_adj_indiv,
+                  aes(y = fraction_levels_completed),
+                  geom = "line",
+                  size = 0.8, linetype = 1, color = 'black',
+                  alpha = 1)+
+  facet_wrap(~game_name, nrow = 3)+
+  scale_y_continuous(limits = c(-0.1, 1.1),
+                     breaks = c(0, 0.25, 0.5, 0.75, 1))+
+  scale_x_continuous(breaks = 1:8)+
+  theme(
+    strip.text.y = element_text(angle = 0),
+    legend.position = 'bottom'#,
+    )+
+  guides(color = F)+
+  labs(
+    x = "'Generation'",
+    y = "Fraction of levels completed"
+  )
+
+ggsave("figs/cogsciExpt_individuals_adjLevel_brm_byGame.pdf", width = 7, height = 5)
+```
+
+
+# Comparison to control data
+
+## Load full control data
+
+```{r}
+df_ind_expand_summary_gen_adj <- read_csv(paste(project.path, "COMPUTED_individualLearners_generationalFormat.csv", sep = ""))
 ```
 
 ### Area under the learning curve for mean learner
@@ -1180,7 +1089,6 @@ df_game_summary_cummax %>%
   group_by(generation, game_name) %>%
   summarize(
     mean_frac_completed = mean(fraction_levels_completed, na.rm = T), # generation by generation
-    #mean_frac_completed = mean(max_frac, na.rm = T) # max level achieved by chain thus far
   ) -> df_gen_meanFrac_games
 
 
@@ -1200,26 +1108,8 @@ df_both_meanFrac_games %>%
 # ggsave("figs/curves_meanChain.png", width = 6.5, height = 4)
 ```
 
-#### Area under curve scatterplot
 
-```{r}
-df_both_meanFrac_games %>%
-  filter(game_name != "ExploreExploit") %>%
-  group_by(game_name, src) %>%
-  summarize(auc = bayestestR::area_under_curve(generation, mean_frac_completed)) %>%
-  pivot_wider(names_from = src, values_from = auc) %>%
-  ggplot(., aes (x = individual, y = chains, label = game_name))+
-  geom_abline(intercept = 0, slope = 1, lty = 2, alpha = 0.4)+
-  geom_point()+
-  ggrepel::geom_text_repel()+
-  xlim(1, 6.5)+ylim(1, 6.5)+
-  ggtitle("Area Under Curve for average participant/chain")+
-  coord_fixed()
-
-# ggsave("figs/auc_scatter_meanChain_cumulMaxForChain.png", width = 5.5, height = 4.5)
-```
-### AUC on a participant-wise basis
-
+### FIGURE 6: AUC scatterplot on a participant-wise basis
 
 ```{r}
 
@@ -1277,3 +1167,172 @@ ggsave("figs/auc_scatter_bs.pdf", width = 5, height = 4)
 with(df_both_auc_bs_wide, cor(individual_mean, chains_mean))
 ```
 
+# Exploratory Message Analysis
+
+## Load data
+
+```{r}
+df_sent <- read_csv(paste(project.path, "ordered_message_history_by_sentence.csv", sep = "")) %>% 
+  filter(exp_id %in% complete.exp_ids)
+
+df_msg_editFine <- read_csv(paste(project.path, "messages_with_diff.csv", sep = "")) %>% mutate(message_length = nchar(message)) %>%
+  filter(exp_id %in% complete.exp_ids) %>%
+  mutate(
+    diff_add_count = ifelse(generation == 0, message_length, diff_add_count),
+    diff_del_count = ifelse(generation == 0, 0, diff_del_count),
+    edit_distance = ifelse(generation == 0, message_length, edit_distance)
+  )
+
+df_msg_orig <- df_msg %>%
+  filter(exp_id %in% complete.exp_ids)
+```
+
+## Number of sentences by generation
+
+```{r}
+df_sent %>%
+  group_by(chain, generation, game_name) %>%
+  summarize(n_sentences = max(sentence_number) + 1) -> df_sent_chain_gen_game
+```
+
+bootstrap n_stencens by gen
+```{r}
+
+df_sent_chain_gen_game %>%
+  group_by(generation, chain) %>%
+  summarize(median = median(n_sentences)) -> df_sent_chain_gen
+
+df_sent_chain_gen_game %>%
+  group_by(generation, game_name) %>%
+  summarize(median = median(n_sentences)) -> df_sent_game_gen
+
+
+# mean_ci_funs <- list("ci_lower" = ci_lower_80, "mean" = mean, "ci_upper" = ci_upper_80)
+
+df_sent_chain_gen_game %>%
+  group_by(generation) %>%
+  tidyboot(summary_function = 
+             function(x) x %>% summarise(median = median(n_sentences)),
+            statistics_functions = function(x) x %>% summarise(
+              across(median, 
+                     list("ci_lower" = ci_lower, "mean" = mean, "ci_upper" = ci_upper))
+              )
+           ) -> df_sent_gen_bs
+```
+
+```{r}
+
+df_sent_gen_bs %>%
+  filter(generation < 8) %>%
+  ggplot(., aes(x = generation + 1, y = empirical_median, ymin = median_ci_lower, ymax = median_ci_upper))+
+  geom_line(data = df_sent_game_gen, inherit.aes = F,
+            aes(x = generation + 1, y = median, 
+                color = game_name, group = game_name), alpha = 0.3)+
+  geom_linerange( alpha = 0.7 )+
+  geom_line()+
+   scale_x_continuous(limits =c(1,8), breaks = 1:8)+
+  labs(x = "Generation", y = "Median number of sentences")+
+  scale_y_continuous(limits =c(0, 8), breaks = seq(0, 8, 2))
+```
+
+
+## Edit distance 
+
+## Distribution by generation
+
+```{r}
+df_sent %>%
+  mutate(edit_distance = ifelse(edit_distance == -1, 0, edit_distance)) %>%
+  distinct(chain, generation, exp_id, game_name, message, edit_distance) -> df_msg_edit
+
+
+df_msg_edit %>%  
+  group_by(chain, generation) %>%
+  summarize(mean_edit = mean(edit_distance)) -> df_edit_chain_gen
+
+
+df_edit_chain_gen %>% 
+  filter(generation != 0) %>%
+  ggplot(., aes(x = mean_edit))+
+  geom_histogram()
+```
+
+
+## Edit distance vs. levels won
+
+```{r}
+df_game_summary %>% 
+  left_join(df_msg_editFine %>%
+    distinct(chain, generation, exp_id, game_name, edit_distance, diff_add_count, diff_del_count)) %>%
+  # left_join(df_msg_edit %>%
+  #   distinct(chain, generation, exp_id, game_name, total_edit)) %>%
+  filter(!is.na(fraction_levels_completed)) %>%
+  # filter(generation != 0) %>%
+  mutate(approx_frac = case_when(
+    fraction_levels_completed == 0 ~ 0,
+    fraction_levels_completed <= 0.25 ~ 0.25,
+    fraction_levels_completed <= 0.5 ~ 0.5,
+    fraction_levels_completed <= 0.75 ~ 0.75,
+    fraction_levels_completed <= 1 ~ 1
+  )) -> df_game_summary_edit
+
+df_game_summary_edit %>%
+  group_by(approx_frac) %>%
+  tidyboot_mean(column = edit_distance, na.rm = T) -> df_game_edit_frac_bs
+  #group_by()
+
+df_game_edit_frac_bs %>%
+  ggplot(., aes( x = approx_frac, y = mean, ymin = ci_lower, ymax = ci_upper))+
+  geom_point(data = df_game_summary_edit,
+             inherit.aes = F,
+             aes( x = approx_frac, y = edit_distance, 
+                  color = chain),
+               position = position_jitter(width  = 0.05),
+             alpha = 0.7)+
+  geom_col( alpha = 0.4, color = 'black', width = 0.1)+
+  geom_linerange(size = 1)+
+  geom_path(alpha = 0.7)+
+  guides(color = F)+
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1))+
+   scale_y_continuous(limits = c(0, 400))+
+  ylab("Edit distance of message sent")+
+  xlab("Fraction of levels completed by sender")
+
+# ggsave("figs/cogsciExpt_editDistanceSender_levelCompleted_n80.pdf", width = 3.8, height = 3.6)
+```
+
+
+#### FIGURE 8: Amount of change to the message vs. success of the sender
+
+```{r}
+df_game_summary_edit %>%
+  pivot_longer(names_to = "key", values_to = "val", 
+               cols = c(edit_distance, diff_add_count,
+                        diff_del_count)) %>%
+  group_by(chain, generation, exp_id, key) %>%
+  summarize(mean_val = mean(val),
+            total_levels_won = sum(levels_completed) )  %>% 
+  ungroup() %>%
+  mutate(key = factor(key, levels = c("edit_distance", "diff_add_count", "diff_del_count"),
+                      labels = c(  "additions", "deletions", "total edits"))) -> df_chain_game_edit_levelswon
+  #group_by()
+
+df_chain_game_edit_levelswon %>%
+  # mutate(generation = factor(generation + 1)) %>%
+  mutate(generation = generation + 1) %>%
+  ggplot(., aes( x = total_levels_won, y = mean_val, 
+                 fill = generation))+
+  scale_fill_viridis(discrete = F, breaks = 1:8)+
+  geom_point(shape = 21)+
+  geom_smooth(aes( x = total_levels_won, y = mean_val), inherit.aes = F,
+              method = 'lm')+
+  ylab('Average edits to message')+
+  xlab("Number of levels won by participant")+
+  facet_wrap(~key)+
+  theme(legend.position = 'bottom')+
+  guides(fill = guide_colourbar(nbin = 8))
+
+ggsave("figs/cogsciExpt_add_vs_deletions_byLevelsWon.pdf", 
+       width = 5, height = 3)
+
+```

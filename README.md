@@ -53,5 +53,6 @@ directory.
 
 ## Analysis Code
 
-The analysis and figures for the paper were generated using R. These scripts
-can be found in the `analysis` folder.
+The analysis and figures for the paper were generated using R (see `analysis.Rmd` for the code).
+You will likely need to modify `path_to_repo_folder` and `project.path` variables at line 49 to point to
+the location of the git repository on your system.
