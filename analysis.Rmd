@@ -46,9 +46,9 @@ parse_sum_scores <- function(x){
   sum(as.numeric(unlist(str_split(str_remove_all(x, "[Decimal'()\\[\\]]"), ","))), na.rm = T)
 }
 
-path_to_repo_folder <- "~/Dropbox (MIT)/" # replace "cogsci21" with your repo folder name
-path_to_repo_folder <- "~/projects/"
-project.path <- paste(path_to_repo_folder, "growing_knowledge_culturally_cogsci21/data/", sep = "")
+path_to_repo_folder <- "~/Dropbox (MIT)/" # Replace with your absolute file path
+# path_to_repo_folder <- "~/projects/"
+project.path <- paste(path_to_repo_folder, "growing_knowledge_culturally_neurips21/data/", sep = "")
 
 ```
 

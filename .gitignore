@@ -1,1 +1,7 @@
 .DS_Store
+.Rproj.user
+*.Rproj
+COMPUTED_*
+data_transformations/*.pyc
+*.rds
+figs/*
