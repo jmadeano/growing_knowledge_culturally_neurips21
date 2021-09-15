@@ -1436,7 +1436,7 @@ df_lng_combined %>%
     combined_tag == "abstract_dynamics_policy" ~ "abstract_policy",
     combined_tag == "abstract_not dynamics_policy" ~ "abstract_policy",
     combined_tag == "concrete_dynamics_policy" ~ "concrete_policy",
-    combined_tag == "abstract_not dynamics_policy" ~ "concrete_policy",
+    combined_tag == "concrete_not dynamics_policy" ~ "concrete_policy",
     TRUE ~ combined_tag)
     ) %>%
   filter(!grepl("not dynamics_not policy", combined_tag, fixed = TRUE)) -> df_lng_combined_combo
@@ -1457,7 +1457,8 @@ ggplot(df_lng_combo_summ, aes(x = generation,
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
   geom_linerange()+
   geom_line()+
-  facet_wrap(~combined_tag)
+  facet_wrap(~combined_tag)+
+  guides(color = F)
 ```
 
 ```{r}
