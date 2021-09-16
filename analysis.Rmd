@@ -31,7 +31,7 @@ parse_sum_scores <- function(x){
 }
 
 path_to_repo_folder <- "~/Dropbox (MIT)/" # Replace with your absolute file path
-path_to_repo_folder <- "~/projects/"
+# path_to_repo_folder <- "~/projects/"
 project.path <- paste(path_to_repo_folder, "growing_knowledge_culturally_neurips21/data/", sep = "")
 
 ```
@@ -1332,42 +1332,40 @@ df_chain_game_edit_levelswon %>%
 
 # What is in the language? (elicit classification)
 
+## Unique Sentences
 ```{r}
-df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
+# df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
 
-df_lng_heldout <- read_csv("data/ought-classification_heldout.csv") %>% 
+df_lng_unique <- read_csv("data/unique_sentences_tagged_9-15.csv") %>% 
   filter(exp_id %in% complete.exp_ids,
          generation < 8)
 
-df_lng_combined <- bind_rows(
-  #df_lng_labeled, 
-  df_lng_heldout
-) %>%
+df_lng_unique <- df_lng_unique %>%
   rename(
-     # "dynamics_label" = "dynamics -- Your Tag",
-    "dynamics_elicit" = "dynamics -- Elicit's Tag",
-    "dynamics_elicitProb" = "dynamics -- P(Elicit's tag)",
-    # "policy_label" = "policy -- Your Tag",
-     "policy_elicit" = "policy -- Elicit's Tag",
-    "policy_elicitProb"= "policy -- P(Elicit's tag)",
-     # "abstractness_label" =  "abstract -- Your Tag",
-     "abstractness_elicit" = "abstract -- Elicit's Tag",
-    "abstractness_elicitProb" = "abstract -- P(Elicit's tag)",  
-     # "valence_label" = "valence -- Your Tag",
-    "valence_elicit" = "valence -- Elicit's Tag",
-     "valence_elicitProb" = "valence -- P(Elicit's tag)",
-     "dynamics_pastThreshold" = `dymanics -- Elicit's Tag meets confidence threshold`,
-      "policy_pastThreshold" = `policy -- Elicit's Tag meets confidence threshold`,
-     "abstractness_pastThreshold" = `abstract -- Elicit's Tag meets confidence threshold`,
-     "valence_pastThreshold" = `valence -- Elicit's Tag meets confidence threshold`
+    "dynamics_label" = "dynamics_human_label",
+    "dynamics_elicit" = "dynamics_elicit_label",
+    "dynamics_elicitProb" = "dynamics_elicit_confidence",
+    "policy_label" = "policy_human_label",
+    "policy_elicit" = "policy_elicit_label",
+    "policy_elicitProb"= "policy_elicit_confidence",
+    "abstractness_label" =  "abstract_human_label",
+    "abstractness_elicit" = "abstract_elicit_label",
+    "abstractness_elicitProb" = "abstract_elicit_confidence",
+    "valence_label" = "valence_human_label",
+    "valence_elicit" = "valence_elicit_label",
+    "valence_elicitProb" = "valence_elicit_confidence",
+    "dynamics_pastThreshold" = "dynamics_elicit_aboveThreshold",
+    "policy_pastThreshold" = "policy_elicit_aboveThreshold",
+    "abstractness_pastThreshold" = "abstract_elicit_aboveThreshold",
+    "valence_pastThreshold" = "valence_elicit_aboveThreshold"
   ) %>%
-  select(sentence, generation, game_name, chain, ends_with("_label"), ends_with("_elicit"), 
+  select(sentence, generation, game_name, chain, ends_with("_label"), ends_with("_elicit"),
          ends_with("_elicitProb"),
          ends_with("_pastThreshold"))
 ```
 
 ```{r}
-df_lng_combined %>%
+df_lng_unique %>%
   pivot_longer(
     cols = c(-sentence, -generation, -game_name, -chain),
     names_to = c("tag", ".value"),
@@ -1387,9 +1385,9 @@ df_lng_combined %>%
                     "neutral information", 
                     "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
                     "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"), 
-                         labels = c("dynamics", "NOTdyanmics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_tidy
+                         labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_unique_tidy
 
-df_lng_summ <- df_lng_tidy %>%
+df_lng_unique_summ <- df_lng_unique_tidy %>%
   select(-game_name, -chain, -elicitProb, pastThreshold) %>%
   group_by(generation, tag, elicit) %>%
  tidyboot(summary_function = count_summary_fn,
@@ -1399,7 +1397,7 @@ df_lng_summ <- df_lng_tidy %>%
 
 
 ```{r}
-ggplot(df_lng_summ, aes(x = generation, 
+ggplot(df_lng_unique_summ, aes(x = generation, 
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = tag))+
   geom_linerange()+
   geom_line()+
@@ -1410,7 +1408,7 @@ ggplot(df_lng_summ, aes(x = generation,
 ## examine specific combinations of tags
 
 ```{r}
-df_lng_combined %>%
+df_lng_unique %>%
   mutate(dynamics_elicit = 
            factor(dynamics_elicit, 
                   levels = c(
@@ -1439,21 +1437,21 @@ df_lng_combined %>%
     combined_tag == "concrete_not dynamics_policy" ~ "concrete_policy",
     TRUE ~ combined_tag)
     ) %>%
-  filter(!grepl("not dynamics_not policy", combined_tag, fixed = TRUE)) -> df_lng_combined_combo
+  filter(!grepl("not dynamics_not policy", combined_tag, fixed = TRUE)) -> df_lng_unique_combo
 ```
 
 The above filtering / processing removes 'neither nor' statements and combines all forms of 'ignorance'. It also looks to see whether policy information is present (either with or without dynamics).
 
 
 ```{r}
-df_lng_combo_summ <- df_lng_combined_combo %>%
+df_lng_unique_combo_summ <- df_lng_unique_combo %>%
   group_by(generation, combined_tag) %>%
  tidyboot(summary_function = count_summary_fn,
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
 
-ggplot(df_lng_combo_summ, aes(x = generation, 
+ggplot(df_lng_unique_combo_summ, aes(x = generation, 
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
   geom_linerange()+
   geom_line()+
@@ -1462,14 +1460,156 @@ ggplot(df_lng_combo_summ, aes(x = generation,
 ```
 
 ```{r}
-df_lng_valence_summ <- df_lng_combined_combo %>%
+df_lng_unique_valence_summ <- df_lng_unique_combo %>%
   group_by(generation, valence_elicit) %>%
  tidyboot(summary_function = count_summary_fn,
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
 
-ggplot(df_lng_valence_summ, aes(x = generation, 
+ggplot(df_lng_unique_valence_summ, aes(x = generation, 
+                        y = mean, ymin = ci_lower, ymax = ci_upper, color = valence_elicit))+
+  geom_linerange()+
+  geom_line()+
+  facet_wrap(~valence_elicit)
+```
+
+## All Sentences
+```{r}
+# df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
+
+df_lng_all <- read_csv("data/all_sentences_tagged_9-15.csv") %>% 
+  filter(exp_id %in% complete.exp_ids,
+         generation < 8)
+
+df_lng_all <- df_lng_all %>%
+  rename(
+    "dynamics_label" = "dynamics_human_label",
+    "dynamics_elicit" = "dynamics_elicit_label",
+    "dynamics_elicitProb" = "dynamics_elicit_confidence",
+    "policy_label" = "policy_human_label",
+    "policy_elicit" = "policy_elicit_label",
+    "policy_elicitProb"= "policy_elicit_confidence",
+    "abstractness_label" =  "abstract_human_label",
+    "abstractness_elicit" = "abstract_elicit_label",
+    "abstractness_elicitProb" = "abstract_elicit_confidence",
+    "valence_label" = "valence_human_label",
+    "valence_elicit" = "valence_elicit_label",
+    "valence_elicitProb" = "valence_elicit_confidence",
+    "dynamics_pastThreshold" = "dynamics_elicit_aboveThreshold",
+    "policy_pastThreshold" = "policy_elicit_aboveThreshold",
+    "abstractness_pastThreshold" = "abstract_elicit_aboveThreshold",
+    "valence_pastThreshold" = "valence_elicit_aboveThreshold"
+  ) %>%
+  select(sentence, generation, game_name, chain, ends_with("_label"), ends_with("_elicit"),
+         ends_with("_elicitProb"),
+         ends_with("_pastThreshold"))
+```
+
+```{r}
+df_lng_all %>%
+  pivot_longer(
+    cols = c(-sentence, -generation, -game_name, -chain),
+    names_to = c("tag", ".value"),
+    names_pattern = "(.+)_(.+)"
+  ) %>%
+  mutate(elicit = 
+           factor(elicit, 
+                  levels = c(
+                    "dynamics, or how the world works including explanations or affordances",
+                    "not dynamics, or how the world works including explanations or affordances",
+                                    
+                    "policy, or what actions to take including strategies or instructions", 
+                    "not policy, or what actions to take including strategies or instructions", 
+                    "ignorance statements or specific experiences", 
+                    "abstract, complex, high-level information", 
+                    "concrete, simple, low-level information",
+                    "neutral information", 
+                    "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
+                    "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"), 
+                         labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_all_tidy
+
+df_lng_all_summ <- df_lng_all_tidy %>%
+  select(-game_name, -chain, -elicitProb, pastThreshold) %>%
+  group_by(generation, tag, elicit) %>%
+ tidyboot(summary_function = count_summary_fn,
+       statistics_functions = function(x) x %>%
+       summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+```
+
+
+```{r}
+ggplot(df_lng_all_summ, aes(x = generation, 
+                        y = mean, ymin = ci_lower, ymax = ci_upper, color = tag))+
+  geom_linerange()+
+  geom_line()+
+  facet_wrap(~tag+ elicit)
+```
+
+
+## examine specific combinations of tags
+
+```{r}
+df_lng_all %>%
+  mutate(dynamics_elicit = 
+           factor(dynamics_elicit, 
+                  levels = c(
+                    "dynamics, or how the world works including explanations or affordances",
+                    "not dynamics, or how the world works including explanations or affordances"),
+                  labels = c("dynamics", "not dynamics")),
+         policy_elicit = 
+           factor(policy_elicit, levels = c(                    "policy, or what actions to take including strategies or instructions", 
+                    "not policy, or what actions to take including strategies or instructions"
+           ), labels = c("policy", "not policy")
+           ),
+         abstractness_elicit = factor(abstractness_elicit, levels = c("ignorance statements or specific experiences", 
+                    "abstract, complex, high-level information", 
+                    "concrete, simple, low-level information"), labels = c("ignorance", "abstract", "concrete")),
+         valence_elicit = factor(valence_elicit, levels = c("neutral information", 
+                    "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
+                    "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"),
+                    labels = c("neutral", "loss", "win"))) %>%
+  mutate_at(vars(dynamics_elicit, policy_elicit, abstractness_elicit, valence_elicit), as.character) %>%
+  unite("combined_tag", c(abstractness_elicit, dynamics_elicit, policy_elicit), sep = "_") %>%
+  mutate(combined_tag = case_when(
+    grepl("ignorance", combined_tag, fixed = TRUE) ~  "ignorance",
+    combined_tag == "abstract_dynamics_policy" ~ "abstract_policy",
+    combined_tag == "abstract_not dynamics_policy" ~ "abstract_policy",
+    combined_tag == "concrete_dynamics_policy" ~ "concrete_policy",
+    combined_tag == "concrete_not dynamics_policy" ~ "concrete_policy",
+    TRUE ~ combined_tag)
+    ) %>%
+  filter(!grepl("not dynamics_not policy", combined_tag, fixed = TRUE)) -> df_lng_all_combo
+```
+
+The above filtering / processing removes 'neither nor' statements and combines all forms of 'ignorance'. It also looks to see whether policy information is present (either with or without dynamics).
+
+
+```{r}
+df_lng_all_combo_summ <- df_lng_all_combo %>%
+  group_by(generation, combined_tag) %>%
+ tidyboot(summary_function = count_summary_fn,
+       statistics_functions = function(x) x %>%
+       summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+
+
+ggplot(df_lng_all_combo_summ, aes(x = generation, 
+                        y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
+  geom_linerange()+
+  geom_line()+
+  facet_wrap(~combined_tag)+
+  guides(color = F)
+```
+
+```{r}
+df_lng_all_valence_summ <- df_lng_all_combo %>%
+  group_by(generation, valence_elicit) %>%
+ tidyboot(summary_function = count_summary_fn,
+       statistics_functions = function(x) x %>%
+       summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+
+
+ggplot(df_lng_all_valence_summ, aes(x = generation, 
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = valence_elicit))+
   geom_linerange()+
   geom_line()+
