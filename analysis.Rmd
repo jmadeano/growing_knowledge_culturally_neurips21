@@ -1335,8 +1335,8 @@ df_chain_game_edit_levelswon %>%
 ## Unique Sentences
 ```{r}
 # df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
-
-df_lng_unique <- read_csv("data/unique_sentences_tagged_9-15.csv") %>% 
+# R is inferring the wrong type for some cols, so up the number of rows before inferring with guess_max (default 1000)
+df_lng_unique <- read_csv("data/unique_sentences_tagged_9-15.csv", guess_max = 1500) %>% 
   filter(exp_id %in% complete.exp_ids,
          generation < 8)
 
@@ -1616,5 +1616,8 @@ ggplot(df_lng_all_valence_summ, aes(x = generation,
   facet_wrap(~valence_elicit)
 ```
 
-
+# What sentences are deleted?
+```{r}
+df_lng_all
+```
 
