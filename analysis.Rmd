@@ -1338,9 +1338,7 @@ df_chain_game_edit_levelswon %>%
 
 df_lng_unique <- read_csv("data/unique_sentences_tagged_9-15.csv") %>% 
   filter(exp_id %in% complete.exp_ids,
-         generation < 8)
-
-df_lng_unique <- df_lng_unique %>%
+         generation < 8) %>%
   rename(
     "dynamics_label" = "dynamics_human_label",
     "dynamics_elicit" = "dynamics_elicit_label",
@@ -1480,9 +1478,7 @@ ggplot(df_lng_unique_valence_summ, aes(x = generation,
 
 df_lng_all <- read_csv("data/all_sentences_tagged_9-15.csv") %>% 
   filter(exp_id %in% complete.exp_ids,
-         generation < 8)
-
-df_lng_all <- df_lng_all %>%
+         generation < 8) %>%
   rename(
     "dynamics_label" = "dynamics_human_label",
     "dynamics_elicit" = "dynamics_elicit_label",
@@ -1501,7 +1497,9 @@ df_lng_all <- df_lng_all %>%
     "abstractness_pastThreshold" = "abstract_elicit_aboveThreshold",
     "valence_pastThreshold" = "valence_elicit_aboveThreshold"
   ) %>%
-  select(sentence, generation, game_name, chain, ends_with("_label"), ends_with("_elicit"),
+  select(sentence, generation, game_name, chain, 
+         # ends_with("_label"), 
+         ends_with("_elicit"),
          ends_with("_elicitProb"),
          ends_with("_pastThreshold"))
 ```
@@ -1617,4 +1615,17 @@ ggplot(df_lng_all_valence_summ, aes(x = generation,
 ```
 
 
+## Relating language to performance / play
+
+```{r}
+df_lng_all_tidy %>%
+  mutate(elicit = as.character(elicit)) %>%
+  group_by(chain, generation, game_name, tag, elicit) %>%
+  count() %>%
+  ungroup() %>%
+  group_by(chain, generation, game_name, tag) %>%
+  mutate(
+    prop = n / sum(n)
+  ) %>% ggplot(., aes(x = n))+geom_histogram()
+```
 
