@@ -24,6 +24,7 @@ library(ggthemes)
 library(ggstance)
 library(tidytext)
 library(jsonlite)
+library(caret)
 theme_set(theme_few())
 
 parse_sum_scores <- function(x){
@@ -1374,7 +1375,6 @@ df_lng_unique %>%
                   levels = c(
                     "dynamics, or how the world works including explanations or affordances",
                     "not dynamics, or how the world works including explanations or affordances",
-                                    
                     "policy, or what actions to take including strategies or instructions", 
                     "not policy, or what actions to take including strategies or instructions", 
                     "ignorance statements or specific experiences", 
@@ -1383,7 +1383,21 @@ df_lng_unique %>%
                     "neutral information", 
                     "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
                     "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"), 
-                         labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_unique_tidy
+                  labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) %>% 
+  mutate(label = 
+           factor(label, 
+                  levels = c(
+                    "dynamics, or how the world works including explanations or affordances",
+                    "not dynamics, or how the world works including explanations or affordances",
+                    "policy, or what actions to take including strategies or instructions", 
+                    "not policy, or what actions to take including strategies or instructions", 
+                    "ignorance statements or specific experiences", 
+                    "abstract, complex, high-level information", 
+                    "concrete, simple, low-level information",
+                    "neutral information", 
+                    "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
+                    "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"), 
+                    labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_unique_tidy
 
 df_lng_unique_summ <- df_lng_unique_tidy %>%
   select(-game_name, -chain, -elicitProb, pastThreshold) %>%
@@ -1515,8 +1529,7 @@ df_lng_all %>%
            factor(elicit, 
                   levels = c(
                     "dynamics, or how the world works including explanations or affordances",
-                    "not dynamics, or how the world works including explanations or affordances",
-                                    
+                    "not dynamics, or how the world works including explanations or affordances",          
                     "policy, or what actions to take including strategies or instructions", 
                     "not policy, or what actions to take including strategies or instructions", 
                     "ignorance statements or specific experiences", 
@@ -1633,3 +1646,56 @@ df_lng_all_tidy %>%
 df_lng_all
 ```
 
+# Elicit accuracy
+
+## Overall
+
+```{r}
+df_lng_unique_tidy %>% 
+  filter(!is.na(label)) -> df_lng_unique_tidy_labeled
+
+confusionMatrix(data = df_lng_unique_tidy_labeled$elicit, 
+                reference = df_lng_unique_tidy_labeled$label,
+                mode = "prec_recall")
+```
+
+## Dynamics
+
+```{r}
+df_lng_unique_tidy_labeled %>% filter(tag == "dynamics") %>% droplevels(.) -> df_lng_unique_tidy_labeled_dynamics
+
+confusionMatrix(data = df_lng_unique_tidy_labeled_dynamics$elicit, 
+                reference = df_lng_unique_tidy_labeled_dynamics$label,
+                mode = "prec_recall")
+```
+
+## Policy
+
+```{r}
+df_lng_unique_tidy_labeled %>% filter(tag == "policy") %>% droplevels(.) -> df_lng_unique_tidy_labeled_policy
+
+confusionMatrix(data = df_lng_unique_tidy_labeled_policy$elicit, 
+                reference = df_lng_unique_tidy_labeled_policy$label,
+                mode = "prec_recall")
+```
+
+## Abstractness
+
+```{r}
+df_lng_unique_tidy_labeled %>% filter(tag == "abstractness") %>% droplevels(.) -> df_lng_unique_tidy_labeled_abstractness
+
+confusionMatrix(data = df_lng_unique_tidy_labeled_abstractness$elicit, 
+                reference = df_lng_unique_tidy_labeled_abstractness$label,
+                mode = "prec_recall")
+
+```
+
+## Valence
+
+```{r}
+df_lng_unique_tidy_labeled %>% filter(tag == "valence") %>% droplevels(.) -> df_lng_unique_tidy_labeled_valence
+
+confusionMatrix(data = df_lng_unique_tidy_labeled_valence$elicit, 
+                reference = df_lng_unique_tidy_labeled_valence$label,
+                mode = "prec_recall")
+```
