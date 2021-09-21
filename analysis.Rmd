@@ -30,8 +30,8 @@ parse_sum_scores <- function(x){
   sum(as.numeric(unlist(str_split(str_remove_all(x, "[Decimal'()\\[\\]]"), ","))), na.rm = T)
 }
 
-path_to_repo_folder <- "~/Dropbox (MIT)/" # Replace with your absolute file path
-# path_to_repo_folder <- "~/projects/"
+# path_to_repo_folder <- "~/Dropbox (MIT)/" # Replace with your absolute file path
+path_to_repo_folder <- "~/projects/"
 project.path <- paste(path_to_repo_folder, "growing_knowledge_culturally_neurips21/data/", sep = "")
 
 ```
@@ -1168,7 +1168,8 @@ with(df_both_auc_bs_wide, cor(individual_mean, chains_mean))
 df_sent <- read_csv(paste(project.path, "ordered_message_history_by_sentence.csv", sep = "")) %>% 
   filter(exp_id %in% complete.exp_ids)
 
-df_msg_editFine <- read_csv(paste(project.path, "messages_with_diff.csv", sep = "")) %>% mutate(message_length = nchar(message)) %>%
+df_msg_editFine <- read_csv(paste(project.path, "messages_with_diff.csv", sep = "")) %>% 
+  mutate(message_length = nchar(message)) %>%
   filter(exp_id %in% complete.exp_ids) %>%
   mutate(
     diff_add_count = ifelse(generation == 0, message_length, diff_add_count),
@@ -1497,7 +1498,7 @@ df_lng_all <- read_csv("data/all_sentences_tagged_9-15.csv") %>%
     "abstractness_pastThreshold" = "abstract_elicit_aboveThreshold",
     "valence_pastThreshold" = "valence_elicit_aboveThreshold"
   ) %>%
-  select(sentence, generation, game_name, chain, 
+  select(sentence, generation, game_name, chain, exp_id,
          # ends_with("_label"), 
          ends_with("_elicit"),
          ends_with("_elicitProb"),
@@ -1507,7 +1508,7 @@ df_lng_all <- read_csv("data/all_sentences_tagged_9-15.csv") %>%
 ```{r}
 df_lng_all %>%
   pivot_longer(
-    cols = c(-sentence, -generation, -game_name, -chain),
+    cols = c(-sentence, -generation, -game_name, -chain, -exp_id),
     names_to = c("tag", ".value"),
     names_pattern = "(.+)_(.+)"
   ) %>%
@@ -1528,7 +1529,7 @@ df_lng_all %>%
                          labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_all_tidy
 
 df_lng_all_summ <- df_lng_all_tidy %>%
-  select(-game_name, -chain, -elicitProb, pastThreshold) %>%
+  select(-game_name, -chain, -exp_id, -elicitProb, pastThreshold) %>%
   group_by(generation, tag, elicit) %>%
  tidyboot(summary_function = count_summary_fn,
        statistics_functions = function(x) x %>%
@@ -1585,7 +1586,7 @@ The above filtering / processing removes 'neither nor' statements and combines a
 
 ```{r}
 df_lng_all_combo_summ <- df_lng_all_combo %>%
-  group_by(generation, combined_tag) %>%
+group_by(generation, combined_tag) %>%
  tidyboot(summary_function = count_summary_fn,
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
@@ -1617,17 +1618,132 @@ ggplot(df_lng_all_valence_summ, aes(x = generation,
 ## Relating language to performance / play
 
 ```{r}
-df_lng_all_tidy %>%
-  mutate(elicit = as.character(elicit)) %>%
-  group_by(chain, generation, game_name, tag, elicit) %>%
+# df_lng_all_tidy %>%
+df_lng_all_combo %>%
+  # mutate(elicit = as.character(elicit)) %>%
+  # group_by(chain, generation, game_name, exp_id, tag, elicit) %>%
+  group_by(chain, generation, game_name, exp_id, combined_tag) %>%
   count() %>%
   ungroup() %>%
-  group_by(chain, generation, game_name, tag) %>%
+  group_by(chain, generation, game_name, exp_id) %>%
   mutate(
     prop = n / sum(n)
-  ) %>% ggplot(., aes(x = n))+geom_histogram()
+  ) %>% 
+  # select(-n) %>%
+  select(-prop) %>%
+  pivot_wider(names_from = combined_tag, 
+#              values_from = prop,
+              values_from = n,
+              values_fill = 0) -> df_lng_all_tidy_prop
+
+df_lng_all_tidy_prop %>% 
+  pivot_longer(cols = c(-chain, -generation, -game_name, -exp_id),
+               names_to = "combined_tag",
+               values_to = "prop") %>%
+  ggplot(., aes(x = prop))+
+  geom_histogram()
+```
+ 
+```{r check size of msg tag df}
+# worked with older version of df_lng_all_tidy_prop that depended on df_lng_all_tidy 
+
+# df_lng_all_tidy_prop %>%
+#   unite("tag_elicit", c(tag, elicit)) %>%
+#   select(-n) %>%
+#   spread(tag_elicit, prop) %>%
+#   glimpse()
 ```
 
+### join msg stats with performance stats
+
+```{r}
+df_lng_all_tidy_prop %>%
+  left_join(., 
+            df_msg_editFine %>% 
+              ungroup() %>% 
+              select(exp_id, received_from_id) %>%
+              rename(receiver_id = exp_id,
+                     exp_id = received_from_id)) %>%
+  rename(sender_id = exp_id) %>% 
+  rename(exp_id = receiver_id) %>%
+  ungroup() %>%
+  select(-generation) %>%
+  left_join(., df_game_summary) %>%
+  left_join(df_msg_editFine %>% 
+              ungroup() %>% 
+              rename(sender_id = exp_id) %>% 
+              select(sender_id, game_name, message_length)) %>% 
+  distinct() -> df_game_lng
+
+
+df_game_lng %>%
+  mutate(
+    concrete_policy_norm = concrete_policy - mean(concrete_policy),
+    `concrete_dynamics_not policy_norm` = `concrete_dynamics_not policy` - mean(`concrete_dynamics_not policy`),
+    `abstract_dynamics_not policy_norm` = `abstract_dynamics_not policy` - mean(`abstract_dynamics_not policy`),
+    abstract_policy_norm = abstract_policy - mean(abstract_policy),
+    ignorance_norm = ignorance - mean(ignorance)
+  ) -> df_game_lng_norm
+```
+
+basic thing
+
+```{r}
+lm(
+  fraction_levels_completed ~ -1 + abstract_policy + ignorance + 
+    `concrete_dynamics_not policy` + `abstract_dynamics_not policy` +
+    concrete_policy + message_length, 
+  data = df_game_lng %>%
+    filter(!is.na(fraction_levels_completed))
+  ) -> rs.prelim.lang
+
+summary(rs.prelim.lang)
+```
+
+```{r}
+df_game_lng %>%
+    select(chain, game_name, fraction_levels_completed, 
+           abstract_policy, ignorance, generation,
+    `concrete_dynamics_not policy`, `abstract_dynamics_not policy`,
+    concrete_policy)  %>%
+  #distinct()
+  pivot_longer(cols = c(-chain, -generation, -game_name, -fraction_levels_completed),
+               names_to = "combined_tag",
+               values_to = "prop") -> df_game_lng_long
+
+df_game_lng_long %>%
+  ggplot(., aes( x = prop, y = fraction_levels_completed))+
+  geom_point()+
+  facet_wrap(~combined_tag)
+
+```
+
+
+
+
+normed predictors
+```{r}
+lm(
+  fraction_levels_completed ~ -1 + abstract_policy_norm + ignorance_norm + 
+    `concrete_dynamics_not policy_norm` + `abstract_dynamics_not policy_norm` +
+    concrete_policy_norm, 
+  data = df_game_lng_norm %>%
+    filter(!is.na(fraction_levels_completed))
+  ) -> rs.prelim.lang_norm
+
+summary(rs.prelim.lang_norm)
+```
+
+
+```{r}
+df_game_lng %>%
+  ungroup () %>%
+  select(abstract_policy, ignorance,
+    `concrete_dynamics_not policy`, `abstract_dynamics_not policy`,
+    concrete_policy) %>%
+  View()
+
+```
 # What sentences are deleted?
 ```{r}
 df_lng_all
