@@ -1461,15 +1461,74 @@ df_lng_unique_combo_summ <- df_lng_unique_combo %>%
   group_by(generation, combined_tag) %>%
  tidyboot(summary_function = count_summary_fn,
        statistics_functions = function(x) x %>%
-       summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
+       summarise(across(stat, mean_ci_funs, .names = "{.fn}"))) %>%
+  ungroup() %>%
+  mutate(
+    combined_tag = factor(combined_tag, 
+                          levels = c("abstract_policy",
+                                     "concrete_policy",
+                                     "ignorance",
+                                     "concrete_dynamics_not policy",
+                                     "abstract_dynamics_not policy"),
+                          labels = c(
+                                                                 "Abstract Policy",
+  "Concrete Policy",
+                                     "Ignorance",
+                                     "Concrete Dynamics",
+                                     "Abstract Dynamics"))
+  ) %>%
+  bind_rows(
+    data.frame(
+      generation = c(6, 7),
+      combined_tag = "Ignorance",
+      n = c(0, 0),
+      empirical_n = c(0, 0),
+      empirical_stat = c(0, 0),
+      ci_lower = c(0.01, 0.01),
+      mean = c(0.01, 0.01),
+      ci_upper = c(0.01, 0.01)
+    )
+  )
+
+df_lng_unique_combo_last <- df_lng_unique_combo_summ %>% 
+    group_by(combined_tag) %>%
+    summarize(
+        last = dplyr::last(mean)
+    ) %>%
+  ungroup() %>%
+  mutate(
+    last = case_when(
+      combined_tag == "Ignorance" ~ 0,
+      combined_tag == "Abstract Dynamics" ~ 0.04,
+      combined_tag == "Concrete Policy" ~ 0.45,
+      combined_tag == "Concrete Dynamics" ~ 0.4,
+      TRUE ~ last
+      ))
 
 
-ggplot(df_lng_unique_combo_summ, aes(x = generation, 
+ggplot(df_lng_unique_combo_summ, aes(x = generation + 1, 
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
-  geom_linerange()+
-  geom_line()+
-  facet_wrap(~combined_tag)+
-  guides(color = F)
+  geom_linerange(alpha = 0.5)+
+  geom_line(alpha = 1)+
+  scale_x_continuous(expand = c(0,0),
+                     limits = c(0.9, 8.1))+
+  scale_y_continuous(
+    limits = c(0, 0.75),
+    expand = c(0,0),
+    sec.axis = dup_axis(
+      breaks = df_lng_unique_combo_last$last,
+      labels = df_lng_unique_combo_last$combined_tag,
+      name = NULL
+    )
+  ) +
+  guides(color="none")+
+  scale_color_manual(values = c("#ca0020", "#f4a582",
+                                "#404040",
+                                "#92c5de","#0571b0"))+
+  ylab("Proportion of new message content")+
+  xlab("Generation")
+
+ggsave("new_lang_byGen.pdf", width = 5, height = 3.25)
 ```
 
 ```{r}
@@ -1596,11 +1655,18 @@ df_lng_all %>%
 
 The above filtering / processing removes 'neither nor' statements and combines all forms of 'ignorance'. It also looks to see whether policy information is present (either with or without dynamics).
 
+### all msgs by gen
 
 ```{r}
+count_summary_fn <- function(x) x %>% 
+  summarize(stat = n()) # %>%
+  # mutate(stat = n / sum(n))
+
+
 df_lng_all_combo_summ <- df_lng_all_combo %>%
 group_by(generation, combined_tag) %>%
- tidyboot(summary_function = count_summary_fn,
+ tidyboot(summary_function = function(x) x %>% 
+  summarize(stat = n()),
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
@@ -1612,6 +1678,70 @@ ggplot(df_lng_all_combo_summ, aes(x = generation,
   facet_wrap(~combined_tag)+
   guides(color = F)
 ```
+
+### Fig (paper) all msg by gen
+
+```{r}
+
+df_lng_all_combo_summ <- df_lng_all_combo_summ %>%
+  ungroup() %>%
+  mutate(
+    combined_tag = factor(combined_tag, 
+                          levels = c("abstract_policy",
+                                     "concrete_policy",
+                                     "ignorance",
+                                     "concrete_dynamics_not policy",
+                                     "abstract_dynamics_not policy"),
+                          labels = c(
+                                                                 "Abstract Policy",
+  "Concrete Policy",
+                                     "Ignorance",
+                                     "Concrete Dynamics",
+                                     "Abstract Dynamics"))
+  ) 
+
+df_lng_all_combo_last <- df_lng_all_combo_summ %>% 
+    group_by(combined_tag) %>%
+    summarize(
+        last = dplyr::last(mean)
+    )  %>%
+  ungroup() %>%
+  mutate(
+    last = case_when(
+      combined_tag == "Ignorance" ~ 0,
+      combined_tag == "Abstract Dynamics" ~ 20,
+      # combined_tag == "Concrete Policy" ~ 0.45,
+      # combined_tag == "Concrete Dynamics" ~ 0.4,
+      TRUE ~ last
+      ))
+
+
+ggplot(df_lng_all_combo_summ, aes(x = generation + 1, 
+                        y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
+  geom_linerange(alpha = 0.5)+
+  geom_line(alpha = 1)+
+  scale_x_continuous(expand = c(0,0),
+                     limits = c(0.9, 8.1))+
+  scale_y_continuous(
+    limits = c(0, 350),
+    expand = c(0,0),
+    sec.axis = dup_axis(
+      breaks = df_lng_all_combo_last$last,
+      labels = df_lng_all_combo_last$combined_tag,
+      name = NULL
+    )
+  ) +
+  guides(color="none")+
+  scale_color_manual(values = c("#ca0020", "#f4a582",
+                                "#404040",
+                                "#92c5de","#0571b0"))+
+  ylab("Number of sentences\n in full corpus")+
+  xlab("Generation")
+
+ggsave("all_lang_byGen.pdf", width = 5, height = 2.75)
+```
+
+#### valence by gen
 
 ```{r}
 df_lng_all_valence_summ <- df_lng_all_combo %>%
@@ -1627,6 +1757,71 @@ ggplot(df_lng_all_valence_summ, aes(x = generation,
   geom_line()+
   facet_wrap(~valence_elicit)
 ```
+
+### All msg by game and gen
+
+```{r}
+expand.grid(
+  generation = unique(df_lng_all_combo$generation),
+  game_name = unique(df_lng_all_combo$game_name),
+  combined_tag = unique(df_lng_all_combo$combined_tag)
+) %>% bind_rows(
+  df_lng_all_combo
+) %>%
+group_by(generation, game_name, combined_tag) %>%
+ tidyboot(summary_function = function(x) x %>% 
+  summarize(stat = n()),
+       statistics_functions = function(x) x %>%
+       summarise(across(stat, mean_ci_funs, .names = "{.fn}"))) ->  df_lng_all_game_combo_summ 
+
+df_lng_all_game_combo_summ <- df_lng_all_game_combo_summ %>%
+  ungroup() %>%
+  mutate(
+    combined_tag = factor(combined_tag, 
+                          levels = c("abstract_policy",
+                                     "concrete_policy",
+                                     "ignorance",
+                                     "concrete_dynamics_not policy",
+                                     "abstract_dynamics_not policy"),
+                          labels = c(
+                                                                 "Abstract Policy",
+  "Concrete Policy",
+                                     "Ignorance",
+                                     "Concrete Dynamics",
+                                     "Abstract Dynamics"))
+  ) %>%
+  mutate(game_name = factor(game_name,
+                            levels = c("avoid_george_v1", "explore_exploit_v1", "lemmings_var2_v1", 
+                "plaqueattack_v1", "preconditions_v1", "push_boulders_v1", 
+                "relational_v1", "sokoban_v1", "watergame_v1", "zelda_v1"),
+                labels =  c("AvoidGeorge", "ExploreExploit", 
+                "Lemmings", "PlaqueAttack", "Preconditions", "PushBoulders",
+                "Relational", "Sokoban", "Watergame", "Zelda")))
+
+
+df_lng_all_game_combo_summ %>%
+  filter(combined_tag != "Ignorance") %>%
+ggplot(., 
+       aes(x = generation + 1, 
+                        y = mean, ymin = ci_lower, ymax = ci_upper, color = combined_tag))+
+  geom_linerange(alpha = 0.5)+
+  geom_line(alpha = 1)+
+  scale_x_continuous(expand = c(0,0),
+                     limits = c(0.9, 8.1))+
+  facet_wrap(~game_name, nrow = 2)+
+  # guides(color="none")+
+  scale_color_manual(values = c("#ca0020", "#f4a582",
+                                #"#404040",
+                                "#92c5de","#0571b0"))+
+  ylab("Number of sentences")+
+  xlab("Generation")+
+  theme(legend.position = 'bottom',
+        legend.title = element_blank())
+
+ggsave("all_lang_byGen_byGame.pdf", width = 8, height = 3.5)
+
+```
+
 
 ## Relating language to performance / play
 
@@ -1712,6 +1907,79 @@ lm(
 
 summary(rs.prelim.lang)
 ```
+
+### bayesian logistic regression with language as predictor
+
+```{r}
+df_game_lng %>%
+  ungroup() %>%
+  rowwise() %>%
+  mutate(adjusted_level = (6 - levels_in_game) + levels_completed ) -> df_game_lng_adj
+
+# df_game_summary_adj %>%
+#   group_by(game_name, chain) %>%
+#   arrange(generation) %>%
+#   mutate(
+#     max_frac = cummax(fraction_levels_completed),
+#     max_adj_level = cummax(adjusted_level)
+#   ) -> df_game_summary_cummax
+```
+
+
+```{r}
+# ideally we'd do ordinal regression, but for ordinal regression, you must include an intercept term, and including an intercept term changes the otherwise straightforward interpretation of the main effects
+
+brm(
+ adjusted_level ~ abstract_policy + ignorance + 
+    concrete_dynamics_notpolicy + abstract_dynamics_notpolicy +
+    concrete_policy + message_length +
+  (1 | chain) +
+  (1 | game_name),
+   data = df_game_lng_adj %>%
+   filter(game_name != "explore_exploit_v1") %>%
+   rename(
+     concrete_dynamics_notpolicy = `concrete_dynamics_not policy`,
+     abstract_dynamics_notpolicy = `abstract_dynamics_not policy`
+   ),
+ family = cumulative("logit"),
+ file = "brm_fit_language_ordinal_n80",
+ # family = gaussian(),
+ chains = 4,
+ iter = 3000,
+ cores = 4
+) -> brm.fit.lang
+
+brm(
+ adjusted_level ~ -1 + abstract_policy + ignorance + 
+    concrete_dynamics_notpolicy + abstract_dynamics_notpolicy +
+    concrete_policy + message_length + 
+  # (-1 + abstract_policy + ignorance + 
+  #   concrete_dynamics_notpolicy + abstract_dynamics_notpolicy +
+  #   concrete_policy | chain)+
+  (-1 + abstract_policy + ignorance + 
+    concrete_dynamics_notpolicy + abstract_dynamics_notpolicy +
+    concrete_policy | game_name),
+   data = df_game_lng_adj %>%
+   filter(game_name != "explore_exploit_v1") %>%
+   rename(
+     concrete_dynamics_notpolicy = `concrete_dynamics_not policy`,
+     abstract_dynamics_notpolicy = `abstract_dynamics_not policy`
+   ),
+ #family = cumulative("logit"),
+ # file = "brm_fit_language_gaussian_n80_noIntercept_gameMaxRE",
+ family = gaussian(),
+ chains = 4,
+ iter = 3000,
+ cores = 4
+) -> brm.fit.lang_gauss
+
+
+
+brm.fit.lang
+brm.fit.lang_gauss
+```
+
+
 
 ```{r}
 df_game_lng %>%
