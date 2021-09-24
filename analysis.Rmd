@@ -1331,6 +1331,27 @@ df_chain_game_edit_levelswon %>%
 #        width = 5, height = 3)
 
 ```
+#### Edits vs. generation + total_levels_won
+
+```{r}
+brm(
+  edit_distance ~ gen_cent + frac_levels_cent + 
+    (1 + gen_cent + frac_levels_cent | game_name) + 
+    (1 + gen_cent + frac_levels_cent | chain),
+  data = df_game_summary_edit %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation),
+      frac_levels_cent = fraction_levels_completed - mean(fraction_levels_completed)
+    ),
+ family = gaussian(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm_edit_gen_cent
+
+summary(rs.brm_edit_gen_cent)
+```
 
 # What is in the language? (elicit classification)
 
@@ -1429,13 +1450,10 @@ df_lng_unique %>%
                     "not dynamics, or how the world works including explanations or affordances"),
                   labels = c("dynamics", "not dynamics")),
          policy_elicit = 
-           factor(policy_elicit, levels = c(                    "policy, or what actions to take including strategies or instructions", 
-                    "not policy, or what actions to take including strategies or instructions"
+           factor(policy_elicit, levels = c("policy, or what actions to take including strategies or instructions", "not policy, or what actions to take including strategies or instructions"
            ), labels = c("policy", "not policy")
            ),
-         abstractness_elicit = factor(abstractness_elicit, levels = c("ignorance statements or specific experiences", 
-                    "abstract, complex, high-level information", 
-                    "concrete, simple, low-level information"), labels = c("ignorance", "abstract", "concrete")),
+         abstractness_elicit = factor(abstractness_elicit, levels = c("ignorance statements or specific experiences", "abstract, complex, high-level information",  "concrete, simple, low-level information"), labels = c("ignorance", "abstract", "concrete")),
          valence_elicit = factor(valence_elicit, levels = c("neutral information", 
                     "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
                     "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"),
@@ -1459,7 +1477,11 @@ The above filtering / processing removes 'neither nor' statements and combines a
 ```{r}
 df_lng_unique_combo_summ <- df_lng_unique_combo %>%
   group_by(generation, combined_tag) %>%
- tidyboot(summary_function = count_summary_fn,
+ tidyboot(
+    summary_function = function(x) x %>% 
+      summarize(stat = n()),
+          #summarize(n = n()) %>%
+        # mutate(stat = n / sum(n)),
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}"))) %>%
   ungroup() %>%
@@ -1473,14 +1495,14 @@ df_lng_unique_combo_summ <- df_lng_unique_combo %>%
                           labels = c(
                                                                  "Abstract Policy",
   "Concrete Policy",
-                                     "Ignorance",
+                                     "Ignorance/Experience",
                                      "Concrete Dynamics",
                                      "Abstract Dynamics"))
   ) %>%
   bind_rows(
     data.frame(
       generation = c(6, 7),
-      combined_tag = "Ignorance",
+      combined_tag = "Ignorance/Experience",
       n = c(0, 0),
       empirical_n = c(0, 0),
       empirical_stat = c(0, 0),
@@ -1498,10 +1520,13 @@ df_lng_unique_combo_last <- df_lng_unique_combo_summ %>%
   ungroup() %>%
   mutate(
     last = case_when(
-      combined_tag == "Ignorance" ~ 0,
-      combined_tag == "Abstract Dynamics" ~ 0.04,
-      combined_tag == "Concrete Policy" ~ 0.45,
-      combined_tag == "Concrete Dynamics" ~ 0.4,
+      # combined_tag == "Ignorance/Experience" ~ 0,
+      # combined_tag == "Abstract Dynamics" ~ 0.04,
+      combined_tag == "Abstract Dynamics" ~ 7,
+      combined_tag == "Concrete Policy" ~ 70,
+      # combined_tag == "Concrete Policy" ~ 0.45,
+      # combined_tag == "Concrete Dynamics" ~ 0.4,
+      combined_tag == "Concrete Dynamics" ~ 60,
       TRUE ~ last
       ))
 
@@ -1513,7 +1538,7 @@ ggplot(df_lng_unique_combo_summ, aes(x = generation + 1,
   scale_x_continuous(expand = c(0,0),
                      limits = c(0.9, 8.1))+
   scale_y_continuous(
-    limits = c(0, 0.75),
+    # limits = c(0, 0.75),
     expand = c(0,0),
     sec.axis = dup_axis(
       breaks = df_lng_unique_combo_last$last,
@@ -1525,26 +1550,175 @@ ggplot(df_lng_unique_combo_summ, aes(x = generation + 1,
   scale_color_manual(values = c("#ca0020", "#f4a582",
                                 "#404040",
                                 "#92c5de","#0571b0"))+
-  ylab("Proportion of new message content")+
+  # ylab("Proportion of new message content")+
+  ylab("Number of new sentences")+
   xlab("Generation")
 
-ggsave("new_lang_byGen.pdf", width = 5, height = 3.25)
+ggsave("new_lang_number_byGen.pdf", width = 5, height = 3)
 ```
+### valence by gen
 
 ```{r}
 df_lng_unique_valence_summ <- df_lng_unique_combo %>%
   group_by(generation, valence_elicit) %>%
- tidyboot(summary_function = count_summary_fn,
+ tidyboot(summary_function = function(x) x %>% 
+        summarize(stat = n() ), # %>%
+          # mutate(stat = n / sum(n)),
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 
 
-ggplot(df_lng_unique_valence_summ, aes(x = generation, 
+df_lng_unique_valence_summ_last <- df_lng_unique_valence_summ %>% 
+    group_by(valence_elicit) %>%
+    summarize(
+        last = dplyr::last(mean)
+    ) %>%
+  ungroup() %>%
+  mutate(
+    last = case_when(
+      valence_elicit == "loss" ~ 15,
+      valence_elicit == "win" ~ 2,
+      TRUE ~ last
+      ))
+
+ggplot(df_lng_unique_valence_summ, aes(x = generation + 1, 
                         y = mean, ymin = ci_lower, ymax = ci_upper, color = valence_elicit))+
-  geom_linerange()+
-  geom_line()+
-  facet_wrap(~valence_elicit)
+  geom_linerange(alpha = 0.5)+
+  geom_line(alpha = 1)+
+  scale_x_continuous(expand = c(0,0),
+                     limits = c(0.9, 8.1))+
+  scale_y_continuous(
+    # limits = c(0, 1),
+    expand = c(0,0),
+    sec.axis = dup_axis(
+      breaks = df_lng_unique_valence_summ_last$last,
+      labels = df_lng_unique_valence_summ_last$valence_elicit,
+      name = NULL
+    )
+  ) +
+  guides(color="none")+
+  ylab("Number of new sentences")+
+  xlab("Generation")
+
+ggsave("new_langVal_number_byGen.pdf", width = 3.25, height = 2.5)
+
 ```
+
+### regression analaysis on what gets added by generation and performance
+
+```{r}
+df_lng_unique_combo %>%
+  mutate_at(vars(generation, game_name, chain, combined_tag), as.factor) %>%
+  dplyr::count(generation, game_name, chain, combined_tag, .drop = F) %>%
+  mutate(
+    generation = as.numeric(as.character(generation)),
+    bool_count = ifelse( n > 0, 1, 0)
+  ) -> df_lng_unique_combo_count
+
+df_lng_unique_combo_count %>%
+  pivot_wider(
+    names_from = combined_tag,
+    names_glue = "{combined_tag}_{.value}",
+    values_from = c(n, bool_count)
+  ) %>%
+  left_join(
+    df_game_summary %>%
+      select(chain, generation, game_name, fraction_levels_completed)
+  ) -> df_lng_unique_combo_count_perf_wide
+
+
+glmer(
+  abstract_policy_bool_count ~ generation + fraction_levels_completed +
+    (1 + generation + fraction_levels_completed | game_name),
+  family = 'binomial',
+  data = df_lng_unique_combo_count_perf_wide
+) -> rs.glmer.bool.abstractpol_gen_perf
+summary(rs.glmer.bool.abstractpol_gen_perf)
+
+
+brm(
+  abstract_policy_bool_count ~ gen_cent + frac_levels_cent + 
+    (1 + gen_cent + frac_levels_cent | game_name) + 
+    (1 + gen_cent + frac_levels_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation),
+      frac_levels_cent = fraction_levels_completed -
+        mean(fraction_levels_completed, na.rm = T) # ALERT! SOME NAs. NEED TO INVESTIGATE
+    ),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_abstractpol.gen_perf
+
+rs.brm.bool_abstractpol.gen_perf
+```
+
+```{r}
+brm(
+  concrete_policy_bool_count ~ gen_cent + frac_levels_cent + 
+    (1 + gen_cent + frac_levels_cent | game_name) + 
+    (1 + gen_cent + frac_levels_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation),
+      frac_levels_cent = fraction_levels_completed -
+        mean(fraction_levels_completed, na.rm = T) # ALERT! SOME NAs. NEED TO INVESTIGATE
+    ),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_concretepol.gen_perf
+rs.brm.bool_concretepol.gen_perf
+```
+
+
+```{r}
+brm(
+  concrete_dynamics_bool_count ~ gen_cent + frac_levels_cent + 
+    (1 + gen_cent + frac_levels_cent | game_name) + 
+    (1 + gen_cent + frac_levels_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation),
+      frac_levels_cent = fraction_levels_completed -
+        mean(fraction_levels_completed, na.rm = T) # ALERT! SOME NAs. NEED TO INVESTIGATE
+    ) %>%
+    rename(concrete_dynamics_bool_count = `concrete_dynamics_not policy_bool_count`),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_concretedyn.gen_perf
+rs.brm.bool_concretedyn.gen_perf
+```
+
+```{r}
+brm(
+  ignorance_bool_count ~ gen_cent + frac_levels_cent + 
+    (1 + gen_cent + frac_levels_cent | game_name) + 
+    (1 + gen_cent + frac_levels_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation),
+      frac_levels_cent = fraction_levels_completed -
+        mean(fraction_levels_completed, na.rm = T) # ALERT! SOME NAs. NEED TO INVESTIGATE
+    ) %>%
+    rename(concrete_dynamics_bool_count = `concrete_dynamics_not policy_bool_count`),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_ign.gen_perf
+rs.brm.bool_ign.gen_perf
+```
+
 
 ## All Sentences
 ```{r}
@@ -1598,7 +1772,9 @@ df_lng_all %>%
                     "neutral information", 
                     "losing, including information about death, losing points, lowering scores, forfeiting, losing lives, getting stuck or trapped", 
                     "winning, including mentions of scoring points, victory, success, goals, solutions, best strategies"), 
-                         labels = c("dynamics", "NOTdynamics", "policy", "NOTpolicy", "ignorance", "abstract", "concrete", "neutral", "loss", "win"))) -> df_lng_all_tidy
+                         labels = c("dynamics", "NOTdynamics", "policy",
+                                    "NOTpolicy", "ignorance", "abstract",
+                                    "concrete", "neutral", "loss", "win"))) -> df_lng_all_tidy
 
 df_lng_all_summ <- df_lng_all_tidy %>%
   select(-game_name, -chain, -exp_id, -elicitProb, pastThreshold) %>%
