@@ -1359,7 +1359,7 @@ summary(rs.brm_edit_gen_cent)
 ```{r}
 # df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
 # R is inferring the wrong type for some cols, so up the number of rows before inferring with guess_max (default 1000)
-df_lng_unique <- read_csv("data/unique_sentences_tagged_9-15.csv", guess_max = 1500) %>% 
+df_lng_unique <- read_csv("data/unique_sentences_tagged_9-25.csv", guess_max = 1500) %>% 
   filter(exp_id %in% complete.exp_ids,
          generation < 8) %>%
   rename(
@@ -1424,7 +1424,8 @@ df_lng_unique %>%
 df_lng_unique_summ <- df_lng_unique_tidy %>%
   select(-game_name, -chain, -elicitProb, pastThreshold) %>%
   group_by(generation, tag, elicit) %>%
- tidyboot(summary_function = count_summary_fn,
+ tidyboot(summary_function = function(x) x %>% 
+        summarize(stat = n()),
        statistics_functions = function(x) x %>%
        summarise(across(stat, mean_ci_funs, .names = "{.fn}")))
 ```
@@ -1522,7 +1523,7 @@ df_lng_unique_combo_last <- df_lng_unique_combo_summ %>%
     last = case_when(
       # combined_tag == "Ignorance/Experience" ~ 0,
       # combined_tag == "Abstract Dynamics" ~ 0.04,
-      combined_tag == "Abstract Dynamics" ~ 7,
+      combined_tag == "Abstract Dynamics" ~ 10,
       combined_tag == "Concrete Policy" ~ 70,
       # combined_tag == "Concrete Policy" ~ 0.45,
       # combined_tag == "Concrete Dynamics" ~ 0.4,
@@ -1554,8 +1555,9 @@ ggplot(df_lng_unique_combo_summ, aes(x = generation + 1,
   ylab("Number of new sentences")+
   xlab("Generation")
 
-ggsave("new_lang_number_byGen.pdf", width = 5, height = 3)
+ggsave("new_lang_number_byGen.pdf", width = 4.5, height = 2.5)
 ```
+
 ### valence by gen
 
 ```{r}
@@ -1627,13 +1629,13 @@ df_lng_unique_combo_count %>%
   ) -> df_lng_unique_combo_count_perf_wide
 
 
-glmer(
-  abstract_policy_bool_count ~ generation + fraction_levels_completed +
-    (1 + generation + fraction_levels_completed | game_name),
-  family = 'binomial',
-  data = df_lng_unique_combo_count_perf_wide
-) -> rs.glmer.bool.abstractpol_gen_perf
-summary(rs.glmer.bool.abstractpol_gen_perf)
+# glmer(
+#   abstract_policy_bool_count ~ generation + fraction_levels_completed +
+#     (1 + generation + fraction_levels_completed | game_name),
+#   family = 'binomial',
+#   data = df_lng_unique_combo_count_perf_wide
+# ) -> rs.glmer.bool.abstractpol_gen_perf
+# summary(rs.glmer.bool.abstractpol_gen_perf)
 
 
 brm(
@@ -1718,6 +1720,106 @@ brm(
 ) -> rs.brm.bool_ign.gen_perf
 rs.brm.bool_ign.gen_perf
 ```
+
+
+### regression analayses on what gets added by generation
+
+```{r}
+brm(
+  abstract_policy_bool_count ~ gen_cent + 
+    (1 + gen_cent | game_name) + 
+    (1 + gen_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation)
+    ),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_abstractpol.gen
+
+rs.brm.bool_abstractpol.gen
+```
+
+```{r}
+brm(
+  concrete_policy_bool_count ~ gen_cent + 
+    (1 + gen_cent | game_name) + 
+    (1 + gen_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation)
+    ),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_concretepol.gen
+rs.brm.bool_concretepol.gen
+```
+
+
+```{r}
+brm(
+  concrete_dynamics_bool_count ~ gen_cent + 
+    (1 + gen_cent | game_name) + 
+    (1 + gen_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation)
+    ) %>%
+    rename(concrete_dynamics_bool_count = `concrete_dynamics_not policy_bool_count`),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_concretedyn.gen
+rs.brm.bool_concretedyn.gen
+```
+
+```{r}
+brm(
+  ignorance_bool_count ~ gen_cent + 
+    (1 + gen_cent | game_name) + 
+    (1 + gen_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation)
+    ) %>%
+    rename(concrete_dynamics_bool_count = `concrete_dynamics_not policy_bool_count`),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_ign.gen
+rs.brm.bool_ign.gen
+```
+
+```{r}
+brm(
+  ignorance_bool_count ~ gen_cent + 
+    (1 + gen_cent | game_name) + 
+    (1 + gen_cent | chain),
+  data = df_lng_unique_combo_count_perf_wide %>%
+    ungroup() %>%
+    mutate(
+      gen_cent = generation - mean(generation)
+    ) %>%
+    rename(concrete_dynamics_bool_count = `concrete_dynamics_not policy_bool_count`),
+ family = bernoulli(),
+ chains = 4,
+ iter = 3000,
+ cores = 4  
+) -> rs.brm.bool_ign.gen
+rs.brm.bool_ign.gen
+```
+
+
 
 
 ## All Sentences
