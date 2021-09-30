@@ -1357,9 +1357,9 @@ summary(rs.brm_edit_gen_cent)
 
 ## Unique Sentences
 ```{r}
-# df_lng_labeled <- read_csv("data/ought-classification_labeled.csv")
-# R is inferring the wrong type for some cols, so up the number of rows before inferring with guess_max (default 1000)
-df_lng_unique <- read_csv("data/unique_sentences_tagged_9-25.csv", guess_max = 1500) %>% 
+df_lng_unique <- read_csv("data/all_sentences_tagged_9-15.csv") %>%
+  arrange(chain, generation, game_name) %>% 
+  distinct(chain, game_name, sentence, .keep_all = TRUE) %>% 
   filter(exp_id %in% complete.exp_ids,
          generation < 8) %>%
   rename(
