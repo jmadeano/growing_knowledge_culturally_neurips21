@@ -1,6 +1,6 @@
-# Learning to solve complex tasks by growing knowledge culturally across generations
+# [Learning to solve complex tasks by growing knowledge culturally across generations](https://arxiv.org/abs/2107.13377)
 
-This repo contains all of the code and data necessary to recreate the figures and results from the paper.
+This repo contains all of the code and data necessary to recreate the figures and results from [the paper](https://arxiv.org/abs/2107.13377).
 
 ## Data
 
@@ -34,6 +34,8 @@ contained in the `data` directory.
 The calculated data tables listed above were generated using a number of
 Python scripts. These scripts can be found in the `data_transformations`
 directory.
+
+_NOTE:_ At this time, the code used to perform language coding/classification with GPT3 is not available. Check out [Elicit](https://elicit.org/) to learn more about the process and implement your own classification workflows.
 
 - `ordered_message_history.py`:
 
