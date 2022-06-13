@@ -2,6 +2,9 @@
 
 This repo contains all of the code and data necessary to recreate the figures and results from [the paper](https://arxiv.org/abs/2107.13377).
 
+## USAGE NOTE
+__These data should not be used without permission, and will soon be superseded by new and larger datasets we will be publishing.__
+
 ## Data
 
 Experiment data can be found in the form of CSVs in the `data` directory. This
